@@ -1,25 +1,18 @@
-import { useRef, useState } from 'react'
-import { loadFile } from '../utils/fileLoader'
+import { useState } from 'react'
 
 export default function UploadZone({ onFile }) {
-  const inputRef = useRef(null)
   const [dragOver, setDragOver] = useState(false)
-
-  async function handleFile(file) {
-    const mboxText = await loadFile(file)
-    onFile(mboxText)
-  }
 
   function onDrop(e) {
     e.preventDefault()
     setDragOver(false)
     const file = e.dataTransfer.files[0]
-    if (file) handleFile(file)
+    if (file) onFile(file)
   }
 
   function onChange(e) {
     const file = e.target.files[0]
-    if (file) handleFile(file)
+    if (file) onFile(file)
   }
 
   return (
@@ -28,13 +21,24 @@ export default function UploadZone({ onFile }) {
       onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
       onDragLeave={() => setDragOver(false)}
       onDrop={onDrop}
-      onClick={() => inputRef.current.click()}
     >
-      <input ref={inputRef} type="file" accept=".mbox,.zip" onChange={onChange} />
+      <input
+        type="file"
+        accept=".zip,.mbox"
+        onChange={onChange}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          opacity: 0,
+          cursor: 'pointer',
+        }}
+      />
       <div className="upload-icon">📬</div>
       <p>Drop your Google Takeout file here</p>
-      <span className="upload-label">Supports .zip (Takeout archive) or .mbox (extracted)</span>
-      <button className="upload-btn" type="button">Choose file</button>
+      <span className="upload-label">Supports .zip (full Takeout archive) or .mbox (Gmail export)</span>
+      <span className="upload-btn">Choose file</span>
     </div>
   )
 }
