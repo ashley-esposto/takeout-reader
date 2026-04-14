@@ -1,13 +1,13 @@
 const CATEGORY_META = {
-  mail:     { label: 'Gmail',            icon: '✉️' },
-  chat:     { label: 'Chat & Hangouts',  icon: '💬' },
-  calendar: { label: 'Calendar',         icon: '📅' },
-  contacts: { label: 'Contacts',         icon: '👤' },
-  activity: { label: 'My Activity',      icon: '🔍' },
-  location: { label: 'Location History', icon: '📍' },
-  chrome:   { label: 'Chrome',           icon: '🌐' },
-  youtube:  { label: 'YouTube',          icon: '▶️' },
-  drive:    { label: 'Drive',            icon: '📁' },
+  mail:     { label: 'Mail',             icon: 'mail' },
+  chat:     { label: 'Chat',             icon: 'chat' },
+  calendar: { label: 'Calendar',         icon: 'calendar_month' },
+  contacts: { label: 'Contacts',         icon: 'contacts' },
+  activity: { label: 'My Activity',      icon: 'history' },
+  location: { label: 'Location',         icon: 'location_on' },
+  chrome:   { label: 'Chrome',           icon: 'language' },
+  youtube:  { label: 'YouTube',          icon: 'play_circle' },
+  drive:    { label: 'Drive',            icon: 'folder' },
 }
 
 export default function CategoryNav({ categories, active, onSelect, emailCount, categoryData }) {
@@ -21,18 +21,21 @@ export default function CategoryNav({ categories, active, onSelect, emailCount, 
   }
 
   return (
-    <nav className="category-nav">
-      <div className="category-nav-header">Takeout Data</div>
+    <nav className="category-nav" aria-label="Takeout data">
+      <div className="category-nav-header">Google Takeout</div>
       {available.map((key) => {
-        const meta = CATEGORY_META[key] || { label: key, icon: '📄' }
+        const meta = CATEGORY_META[key] || { label: key, icon: 'draft' }
         const count = getCount(key)
         return (
           <button
             key={key}
+            type="button"
             className={`category-item${active === key ? ' active' : ''}`}
             onClick={() => onSelect(key)}
           >
-            <span className="category-icon">{meta.icon}</span>
+            <span className="category-icon">
+              <span className="gmi" aria-hidden>{meta.icon}</span>
+            </span>
             <span className="category-label">{meta.label}</span>
             {count != null && (
               <span className="category-count">{count.toLocaleString()}</span>

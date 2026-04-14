@@ -1,18 +1,23 @@
 import { useState } from 'react'
 
-export default function UploadZone({ onFile }) {
+export default function UploadZone({ onFiles }) {
   const [dragOver, setDragOver] = useState(false)
+
+  // Pass raw File objects — do NOT read contents here.
+  // Reading whole mbox in the main thread OOMs; the worker streams in chunks.
+  function handleFileList(list) {
+    const files = Array.from(list || []).filter(Boolean)
+    if (files.length) onFiles(files)
+  }
 
   function onDrop(e) {
     e.preventDefault()
     setDragOver(false)
-    const file = e.dataTransfer.files[0]
-    if (file) onFile(file)
+    handleFileList(e.dataTransfer.files)
   }
 
   function onChange(e) {
-    const file = e.target.files[0]
-    if (file) onFile(file)
+    handleFileList(e.target.files)
   }
 
   return (
@@ -25,6 +30,7 @@ export default function UploadZone({ onFile }) {
       <input
         type="file"
         accept=".zip,.mbox"
+        multiple
         onChange={onChange}
         style={{
           position: 'absolute',
@@ -36,8 +42,8 @@ export default function UploadZone({ onFile }) {
         }}
       />
       <div className="upload-icon">📬</div>
-      <p>Drop your Google Takeout file here</p>
-      <span className="upload-label">Supports .zip (full Takeout archive) or .mbox (Gmail export)</span>
+      <p>Drop Google Takeout file(s) here</p>
+      <span className="upload-label">.zip (Takeout) and/or .mbox (Gmail) — you can add several at once</span>
       <span className="upload-btn">Choose file</span>
     </div>
   )

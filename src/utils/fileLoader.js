@@ -1,10 +1,5 @@
 import JSZip from 'jszip'
 
-/**
- * Category detection rules — ordered by priority.
- * key: internal category name
- * test: function(lowercasePath) => boolean
- */
 const CATEGORY_RULES = [
   { key: 'mail',     test: (p) => p.endsWith('.mbox') },
   { key: 'chat',     test: (p) => (p.includes('google chat') || p.includes('hangouts')) && p.endsWith('.json') },
@@ -19,19 +14,17 @@ const CATEGORY_RULES = [
 
 /**
  * Scan a Google Takeout file and return all found categories.
- * @param {File} file - .zip or .mbox File object
- * @returns {{ type: string, categories: Record<string, Array<{name, getContent}>> }}
+ * @param {File} file - Raw File object from the browser input
  */
 export async function scanTakeout(file) {
   const nameLower = file.name.toLowerCase()
 
-  // Direct .mbox upload — just mail category
+  // Direct .mbox — store the File object; worker will stream-read it in chunks
   if (nameLower.endsWith('.mbox')) {
-    const content = await readFileAsText(file)
     return {
       type: 'direct-mbox',
       categories: {
-        mail: [{ name: file.name, getContent: async () => content }],
+        mail: [{ name: file.name, file }],
       },
     }
   }
@@ -42,9 +35,11 @@ export async function scanTakeout(file) {
     )
   }
 
+  // Read the zip in one go — zip files are typically much smaller than raw mbox
   let zip
   try {
-    zip = await JSZip.loadAsync(file)
+    const buffer = await file.arrayBuffer()
+    zip = await JSZip.loadAsync(buffer)
   } catch (err) {
     throw new Error(
       `Could not open the zip file. Make sure it is a valid, complete Google Takeout archive. (${err.message})`
@@ -77,12 +72,33 @@ export async function scanTakeout(file) {
   return { type: 'takeout-zip', categories }
 }
 
-function readFileAsText(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = (e) => resolve(e.target.result)
-    reader.onerror = () =>
-      reject(new Error('Could not read the file. Try again or check the file is not corrupted.'))
-    reader.readAsText(file)
-  })
+/**
+ * Scan several Takeout zips and/or .mbox files and merge categories (e.g. multiple exports or accounts).
+ */
+export async function scanTakeoutFiles(fileList) {
+  const files = Array.from(fileList || []).filter(Boolean)
+  if (files.length === 0) {
+    throw new Error('No files selected.')
+  }
+  if (files.length === 1) {
+    return scanTakeout(files[0])
+  }
+
+  const merged = { type: 'merged-takeout', categories: {} }
+  for (const file of files) {
+    const one = await scanTakeout(file)
+    for (const [key, arr] of Object.entries(one.categories)) {
+      if (!merged.categories[key]) merged.categories[key] = []
+      merged.categories[key].push(...(arr || []))
+    }
+  }
+
+  if (Object.keys(merged.categories).length === 0) {
+    throw new Error(
+      'No recognizable Google Takeout data in the selected files. ' +
+      'Upload .zip archives from takeout.google.com and/or Gmail .mbox files.'
+    )
+  }
+
+  return merged
 }

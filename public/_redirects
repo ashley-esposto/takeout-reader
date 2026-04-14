@@ -1,0 +1,2 @@
+# Fallback if redirects are read from publish dir without netlify.toml merge
+/*    /index.html   200
