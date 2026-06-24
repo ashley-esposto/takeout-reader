@@ -408,11 +408,18 @@ export default function App() {
         if (fileHandles.length > 0) {
           startParsing(fileHandles.length === 1 ? fileHandles[0] : fileHandles)
         } else {
-          // Zip mode: extract each mbox as a Blob (raw bytes) and feed the
-          // streaming byte scanner — far faster and lighter than decoding the
-          // whole mbox to a giant UTF-16 string and char-scanning it.
-          const blobs = await Promise.all(entries.map((e) => e.getContent('blob')))
-          startParsing(blobs.length === 1 ? blobs[0] : blobs)
+          // Zip mode: hand the worker the zip + entry names so decompression
+          // (and the streaming byte scan) both happen off the main thread,
+          // keeping the UI responsive while a large mailbox loads.
+          const zipEntries = entries
+            .filter((e) => e.zipFile && e.entryName)
+            .map((e) => ({ zipFile: e.zipFile, entryName: e.entryName }))
+          if (zipEntries.length > 0) {
+            startParsing({ mboxZipEntries: zipEntries })
+          } else {
+            const blobs = await Promise.all(entries.map((e) => e.getContent('blob')))
+            startParsing(blobs.length === 1 ? blobs[0] : blobs)
+          }
         }
         setLoadingCategory(null)
         return

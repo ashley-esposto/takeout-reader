@@ -19,6 +19,7 @@
  *  BODY LOAD   — same file-slice approach as before.
  */
 
+import JSZip from 'jszip'
 import { parseHeadersOnly, parseMessage, isMboxFromLine } from '../utils/mboxParser'
 
 const CHUNK_SIZE   = 32 * 1024 * 1024  // 32 MB read chunks during scan
@@ -134,6 +135,9 @@ self.onmessage = async function (e) {
           if (f) await scanSingleFile(f)
         }
         self.postMessage({ type: 'done', total: _starts.length })
+      } else if (msg.mboxZipEntries && msg.mboxZipEntries.length > 0) {
+        await scanZipEntries(msg.mboxZipEntries)
+        self.postMessage({ type: 'done', total: _starts.length })
       } else if (msg.mboxFile) {
         await scanSingleFile(msg.mboxFile)
         self.postMessage({ type: 'done', total: _starts.length })
@@ -193,6 +197,33 @@ async function scanSingleFile (file) {
     } else {
       leftover = new Uint8Array(0)
     }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  SCAN  —  zip mode (decompress mbox entries off the main thread)
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Decompress one or more mbox entries directly inside the worker, then scan
+ * each. Doing the JSZip decompression here (rather than on the main thread)
+ * keeps the UI responsive while a large mailbox is being extracted.
+ *
+ * @param {Array<{zipFile: Blob, entryName: string}>} list
+ */
+async function scanZipEntries (list) {
+  const zipCache = new Map()  // reuse a parsed zip across entries from the same archive
+  for (const { zipFile, entryName } of list) {
+    if (!zipFile || !entryName) continue
+    let zip = zipCache.get(zipFile)
+    if (!zip) {
+      zip = await JSZip.loadAsync(zipFile)
+      zipCache.set(zipFile, zip)
+    }
+    const entry = zip.file(entryName)
+    if (!entry) continue
+    // 'blob' output decompresses without building an intermediate JS string.
+    const blob = await entry.async('blob')
+    await scanSingleFile(blob)
   }
 }
 

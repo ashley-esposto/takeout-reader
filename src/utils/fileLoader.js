@@ -155,6 +155,9 @@ export async function scanTakeout(file) {
     categories[key].push({
       name: entry.name,
       getContent: (format = 'string') => entry.async(format),
+      // Source zip + entry name let the worker decompress mail off-thread.
+      zipFile: file,
+      entryName: entry.name,
     })
   }
 

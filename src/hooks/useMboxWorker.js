@@ -55,6 +55,10 @@ export function useMboxWorker() {
 
     if (typeof input === 'string') {
       worker.postMessage({ mboxText: input })
+    } else if (input && Array.isArray(input.mboxZipEntries)) {
+      // Zip-extracted mailboxes: hand the worker the zip + entry names so it
+      // decompresses off the main thread.
+      worker.postMessage({ mboxZipEntries: input.mboxZipEntries })
     } else if (Array.isArray(input) && input.length > 0) {
       worker.postMessage({ mboxFiles: input })
     } else {

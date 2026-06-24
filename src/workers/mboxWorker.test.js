@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest'
+import JSZip from 'jszip'
 
 /**
  * Integration test for the mbox worker's streaming (Blob/file) scan path —
@@ -74,5 +75,23 @@ describe('mboxWorker streaming scan (Blob input)', () => {
     const res = posted.find((m) => m.type === 'searchResults')
     expect(res.total).toBe(1)
     expect(res.emails[0].subject).toBe('Second message')
+  })
+})
+
+describe('mboxWorker zip mode (worker-side decompression)', () => {
+  it('decompresses an mbox entry from a zip and scans it', async () => {
+    const zip = new JSZip()
+    zip.file('Takeout/Mail/All mail.mbox', MBOX)
+    // arraybuffer (vs blob) so JSZip can read it under Node; in the browser the
+    // app passes a real Blob/File, which loadAsync also accepts.
+    const zipBuf = await zip.generateAsync({ type: 'arraybuffer' })
+
+    await send({ mboxZipEntries: [{ zipFile: zipBuf, entryName: 'Takeout/Mail/All mail.mbox' }] })
+    const done = posted.find((m) => m.type === 'done')
+    expect(done.total).toBe(2)
+
+    await send({ type: 'getPage', start: 0, count: 10, requestId: 'zp1' })
+    const page = posted.find((m) => m.type === 'page')
+    expect(page.emails.map((e) => e.subject)).toEqual(['First message', 'Second message'])
   })
 })
