@@ -1,4 +1,16 @@
 import { useState } from 'react'
+import ExportMenu from './ExportMenu'
+
+const CONTACTS_COLUMNS = [
+  { key: 'name', label: 'Name' },
+  { key: 'org', label: 'Company' },
+  { key: 'title', label: 'Title' },
+  { key: 'emails', label: 'Emails' },
+  { key: 'phones', label: 'Phones' },
+  { key: 'addresses', label: 'Addresses' },
+  { key: 'url', label: 'Website' },
+  { key: 'note', label: 'Notes' },
+]
 
 export default function ContactsViewer({ contacts }) {
   const [selected, setSelected] = useState(null)
@@ -23,6 +35,20 @@ export default function ContactsViewer({ contacts }) {
             placeholder="Search…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+          />
+          <ExportMenu
+            stem="contacts"
+            columns={CONTACTS_COLUMNS}
+            getRows={() => filtered.map((c) => ({
+              name: c.name || '',
+              org: c.org || '',
+              title: c.title || '',
+              emails: (c.emails || []).map((e) => e.value).join('; '),
+              phones: (c.phones || []).map((p) => p.value).join('; '),
+              addresses: (c.addresses || []).map((a) => a.value).join('; '),
+              url: c.url || '',
+              note: c.note || '',
+            }))}
           />
         </div>
         <div className="email-list">

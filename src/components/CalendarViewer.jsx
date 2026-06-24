@@ -1,4 +1,16 @@
 import { useState } from 'react'
+import ExportMenu from './ExportMenu'
+
+const CALENDAR_COLUMNS = [
+  { key: 'start', label: 'Start' },
+  { key: 'end', label: 'End' },
+  { key: 'summary', label: 'Summary' },
+  { key: 'location', label: 'Location' },
+  { key: 'organizer', label: 'Organizer' },
+  { key: 'status', label: 'Status' },
+  { key: 'attendees', label: 'Attendees' },
+  { key: 'description', label: 'Description' },
+]
 
 export default function CalendarViewer({ events }) {
   const [selected, setSelected] = useState(null)
@@ -29,6 +41,20 @@ export default function CalendarViewer({ events }) {
             placeholder="Search…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+          />
+          <ExportMenu
+            stem="calendar"
+            columns={CALENDAR_COLUMNS}
+            getRows={() => filtered.map((e) => ({
+              start: e.start || '',
+              end: e.end || '',
+              summary: e.summary || '',
+              location: e.location || '',
+              organizer: e.organizer || '',
+              status: e.status || '',
+              attendees: (e.attendees || []).map((a) => a.email || a.name).join('; '),
+              description: e.description || '',
+            }))}
           />
         </div>
         <div className="email-list">

@@ -1,4 +1,14 @@
 import { useState } from 'react'
+import ExportMenu from './ExportMenu'
+
+const CHAT_COLUMNS = [
+  { key: 'conversation', label: 'Conversation' },
+  { key: 'source', label: 'Source' },
+  { key: 'sender', label: 'Sender' },
+  { key: 'email', label: 'Sender Email' },
+  { key: 'timestamp', label: 'Timestamp' },
+  { key: 'text', label: 'Message' },
+]
 
 export default function ChatViewer({ conversations }) {
   const [selected, setSelected] = useState(null)
@@ -24,6 +34,20 @@ export default function ChatViewer({ conversations }) {
             placeholder="Search…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+          />
+          <ExportMenu
+            stem="chat"
+            columns={CHAT_COLUMNS}
+            getRows={() => filtered.flatMap((c) =>
+              c.messages.map((m) => ({
+                conversation: c.title || '',
+                source: c.source || '',
+                sender: m.sender || '',
+                email: m.email || '',
+                timestamp: m.timestamp || '',
+                text: m.text || '',
+              }))
+            )}
           />
         </div>
         <div className="email-list">

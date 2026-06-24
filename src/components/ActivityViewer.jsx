@@ -1,5 +1,14 @@
 import { useState, useMemo } from 'react'
 import { parseActivityContent } from '../utils/activityParse'
+import ExportMenu from './ExportMenu'
+
+const ACTIVITY_COLUMNS = [
+  { key: 'time', label: 'Time' },
+  { key: 'header', label: 'Product' },
+  { key: 'title', label: 'Title' },
+  { key: 'subtitle', label: 'Detail' },
+  { key: 'url', label: 'URL' },
+]
 
 const CATEGORY_LABELS = {
   activity: 'My Activity',
@@ -100,6 +109,19 @@ export default function ActivityViewer({ items, category }) {
             autoComplete="off"
           />
         </label>
+        {records.length > 0 && (
+          <ExportMenu
+            stem={category}
+            columns={ACTIVITY_COLUMNS}
+            getRows={() => filtered.map((r) => ({
+              time: r.time || '',
+              header: r.header || '',
+              title: r.title || r.name || '',
+              subtitle: r.subtitle || '',
+              url: r.titleUrl || r.url || '',
+            }))}
+          />
+        )}
       </div>
 
       <div className="activity-body">
