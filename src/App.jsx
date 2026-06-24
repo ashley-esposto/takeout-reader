@@ -98,6 +98,16 @@ export default function App() {
   const pendingSelectIndexRef = useRef(null)
   const [keyboardHelpOpen, setKeyboardHelpOpen] = useState(false)
 
+  // Layout preferences
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  // viewMode: 'split' = side-by-side, 'horizontal' = list above/detail below, 'list' = list only
+  const [viewMode, setViewMode] = useState('split')
+  function cycleViewMode() {
+    setViewMode(m => m === 'split' ? 'horizontal' : m === 'horizontal' ? 'list' : 'split')
+  }
+  const VIEW_MODE_ICON  = { split: 'vertical_split', horizontal: 'horizontal_split', list: 'view_list' }
+  const VIEW_MODE_TITLE = { split: 'Switch to horizontal split', horizontal: 'Switch to list only', list: 'Switch to side-by-side split' }
+
   const { totalEmails, parsing, progress, startParsing, loadPage, searchEmails, loadEmailBody, cancelParsing, getLabels } = useMboxWorker()
 
   useEffect(() => {
@@ -188,6 +198,9 @@ export default function App() {
 
   const handleEmailSelect = useCallback(async (email) => {
     const emailIndex = email._emailIndex
+
+    // If in list-only mode, reveal the reading pane
+    setViewMode(m => m === 'list' ? 'split' : m)
 
     if (loadedBodies.current.has(emailIndex)) {
       setSelectedEmail(loadedBodies.current.get(emailIndex))
@@ -534,8 +547,8 @@ export default function App() {
 
         <div className="category-area">
           {activeCategory === 'mail' && (
-            <div className="mail-split">
-              <aside className="mail-sidebar" aria-label="Labels">
+            <div className={`mail-split mail-split--${viewMode}`}>
+              <aside className={`mail-sidebar${sidebarCollapsed ? ' mail-sidebar--collapsed' : ''}`} aria-label="Labels">
                 <div className="label-nav">
                   <button
                     type="button"
@@ -565,57 +578,78 @@ export default function App() {
                 </div>
               </aside>
 
-              <div className="mail-list-column">
-                <div className="mail-folder-toolbar">
-                  <div className="mail-folder-toolbar-main">
-                    <span className="gmi">{folderToolbarIcon(activeLabel, inSearchMode)}</span>
-                    <h2 className="mail-folder-title">
-                      {inSearchMode ? 'Search results' : folderTitle(activeLabel)}
-                    </h2>
-                    <span className="mail-folder-meta">
-                      {inSearchMode
-                        ? (searchLoading ? 'Searching…' : `${searchTotal.toLocaleString()} found`)
-                        : `${displayTotal.toLocaleString()} conversations`}
-                    </span>
+              <div className="mail-content-area">
+                <div className="mail-list-column">
+                  <div className="mail-folder-toolbar">
+                    <div className="mail-folder-toolbar-main">
+                      <span className="gmi">{folderToolbarIcon(activeLabel, inSearchMode)}</span>
+                      <h2 className="mail-folder-title">
+                        {inSearchMode ? 'Search results' : folderTitle(activeLabel)}
+                      </h2>
+                      <span className="mail-folder-meta">
+                        {inSearchMode
+                          ? (searchLoading ? 'Searching…' : `${searchTotal.toLocaleString()} found`)
+                          : `${displayTotal.toLocaleString()} conversations`}
+                      </span>
+                    </div>
+                    <div className="mail-folder-toolbar-actions">
+                      {isSearching && !searchLoading && searchResults && searchResults.length > 0 && (
+                        <button
+                          type="button"
+                          className="mail-toolbar-btn"
+                          onClick={exportSearchResults}
+                          title="Download the current result list as JSON"
+                        >
+                          <span className="gmi">download</span>
+                          <span>Export</span>
+                        </button>
+                      )}
+                      <span className="mail-toolbar-hint" title="Keyboard shortcuts">
+                        / search · j/k · ? help
+                      </span>
+                      <div className="mail-view-controls" role="group" aria-label="Layout">
+                        <button
+                          type="button"
+                          className="mail-view-btn"
+                          onClick={() => setSidebarCollapsed(v => !v)}
+                          title={sidebarCollapsed ? 'Show labels panel' : 'Hide labels panel'}
+                          aria-pressed={!sidebarCollapsed}
+                        >
+                          <span className="gmi">{sidebarCollapsed ? 'left_panel_open' : 'left_panel_close'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="mail-view-btn"
+                          onClick={cycleViewMode}
+                          title={VIEW_MODE_TITLE[viewMode]}
+                        >
+                          <span className="gmi">{VIEW_MODE_ICON[viewMode]}</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="mail-folder-toolbar-actions">
-                    {isSearching && !searchLoading && searchResults && searchResults.length > 0 && (
-                      <button
-                        type="button"
-                        className="mail-toolbar-btn"
-                        onClick={exportSearchResults}
-                        title="Download the current result list as JSON"
-                      >
-                        <span className="gmi">download</span>
-                        <span>Export</span>
-                      </button>
-                    )}
-                    <span className="mail-toolbar-hint" title="Keyboard shortcuts">
-                      / search · j/k · ? help
-                    </span>
-                  </div>
+                  <EmailList
+                    total={displayTotal}
+                    emailMap={emailsMap.current}
+                    emailsVersion={emailsVersion}
+                    searchEmails={displayEmails}
+                    searchLoading={searchLoading && inSearchMode}
+                    onNeedRange={handleNeedRange}
+                    selected={selectedEmail}
+                    onSelect={handleEmailSelect}
+                  />
                 </div>
-                <EmailList
-                  total={displayTotal}
-                  emailMap={emailsMap.current}
-                  emailsVersion={emailsVersion}
-                  searchEmails={displayEmails}
-                  searchLoading={searchLoading && inSearchMode}
-                  onNeedRange={handleNeedRange}
-                  selected={selectedEmail}
-                  onSelect={handleEmailSelect}
-                />
-              </div>
 
-              <main className="detail-pane">
-                {selectedEmail ? (
-                  <EmailDetail email={selectedEmail} bodyLoading={bodyLoading} />
-                ) : (
-                  <div className="detail-empty">
-                    Select a message to read
-                  </div>
-                )}
-              </main>
+                <main className="detail-pane">
+                  {selectedEmail ? (
+                    <EmailDetail email={selectedEmail} bodyLoading={bodyLoading} />
+                  ) : (
+                    <div className="detail-empty">
+                      Select a message to read
+                    </div>
+                  )}
+                </main>
+              </div>
             </div>
           )}
 

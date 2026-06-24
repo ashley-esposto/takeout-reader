@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <!-- Dark background -->
+  <rect width="1200" height="630" fill="#111111"/>
+
+  <!-- Large C badge — centered, oversized like a favicon blown up -->
+  <rect x="80" y="80" width="460" height="460" rx="90" fill="#222222"/>
+  <!-- C letterform scaled up -->
+  <path d="M430 185
+             C400 153 362 136 320 136
+             C234 136 165 205 165 291
+             C165 377 234 446 320 446
+             C362 446 400 429 430 397
+             L392 362
+             C372 382 348 393 320 393
+             C263 393 218 347 218 291
+             C218 235 263 189 320 189
+             C348 189 372 200 392 220 Z"
+        fill="white"/>
+
+  <!-- Title -->
+  <text x="590" y="260" font-family="system-ui, -apple-system, sans-serif"
+        font-size="82" font-weight="800" letter-spacing="-3"
+        fill="#ffffff">Celigo</text>
+
+  <!-- Subtitle -->
+  <text x="593" y="348" font-family="system-ui, -apple-system, sans-serif"
+        font-size="54" font-weight="500" letter-spacing="-1"
+        fill="#aaaaaa">Takeout Reader</text>
+
+  <!-- Thin rule -->
+  <rect x="590" y="385" width="530" height="2" fill="#333333"/>
+
+  <!-- Tagline -->
+  <text x="590" y="430" font-family="system-ui, -apple-system, sans-serif"
+        font-size="22" font-weight="400" fill="#666666">
+    Gmail · Calendar · Contacts · Activity · Drive
+  </text>
+</svg>

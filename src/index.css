@@ -353,6 +353,12 @@ body {
   flex-direction: column;
   overflow: hidden;
   background: var(--gm-panel);
+  transition: width 0.2s ease, min-width 0.2s ease, border-right-color 0.2s ease;
+}
+.mail-sidebar--collapsed {
+  width: 0;
+  min-width: 0;
+  border-right-color: transparent;
 }
 
 .label-nav {
@@ -401,6 +407,55 @@ body {
   color: var(--gm-text-sec);
   flex-shrink: 0;
 }
+
+/* Content area wrapping list + reading pane */
+.mail-content-area {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Horizontal split: list on top, detail below */
+.mail-split--horizontal .mail-content-area {
+  flex-direction: column;
+}
+.mail-split--horizontal .mail-list-column {
+  flex: none;
+  height: 280px;
+  border-right: none;
+  border-bottom: 1px solid var(--gm-border);
+}
+
+/* List-only: hide the reading pane */
+.mail-split--list .detail-pane {
+  display: none;
+}
+
+/* View layout control buttons */
+.mail-view-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+  padding-left: 8px;
+  border-left: 1px solid var(--gm-border);
+}
+.mail-view-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gm-text-sec);
+  flex-shrink: 0;
+}
+.mail-view-btn:hover { background: var(--gm-row-hover); }
+.mail-view-btn .gmi { font-size: 20px; color: var(--gm-text-sec); }
 
 /* List column + toolbar */
 .mail-list-column {

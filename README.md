@@ -1,6 +1,6 @@
 # Google Takeout Reader
 
-A client-side React app for reading Gmail exports from Google Takeout. No server required — everything runs in your browser.
+A client-side React app for browsing your **Google Takeout** export. Mail, Calendar, Contacts, Chat, and Activity — all parsed and rendered in your browser. No server, no upload: your data never leaves your machine.
 
 ## Getting Started
 
@@ -12,24 +12,33 @@ npm run dev
 
 ## Usage
 
-1. Export your Gmail from [Google Takeout](https://takeout.google.com) — select **Mail** and download the `.zip`
-2. Drop the `.zip` directly into the app (or an extracted `.mbox` file)
-3. The app parses your emails in a background thread — no UI freezing even for large mailboxes
-4. Click any email to read it in Plain Text, HTML, or Raw Headers view
+1. Create an export at [Google Takeout](https://takeout.google.com) — select the products you want (Mail, Calendar, Contacts, Chat, My Activity) and download the `.zip`.
+2. Drop the `.zip` directly into the app (or an extracted file such as a `.mbox`).
+3. The app scans the archive and parses each data type in a background thread — the UI stays responsive even for large mailboxes.
+4. Switch between categories in the top nav and explore.
 
 ## Features
 
-- Drag-and-drop `.zip` or `.mbox` file loading
-- Web Worker parser — large mailboxes (50k+ emails) stay non-blocking
-- Live progress bar with cancel support
-- Search by sender, subject, or body snippet
-- Plain text, rendered HTML, and raw headers tabs
-- Dark editorial theme
+- **Multi-category** — Mail (`.mbox`), Calendar (`.ics`), Contacts (`.vcf`), Chat / Hangouts (JSON), and My Activity (HTML/JSON)
+- **Drag-and-drop** `.zip` or individual file loading
+- **Resilient file reading** — falls back through `arrayBuffer` → `FileReader` → chunked `slice` → `stream` to handle Chrome-on-Windows read failures on large archives
+- **Web Worker mail parser** — large mailboxes (50k+ emails) stay non-blocking, with a live progress bar and cancel support
+- **Gmail labels** — sidebar nav filters mail by `X-Gmail-Labels`
+- **Search** by sender, subject, or body snippet
+- **Mail reading views** — Plain Text, rendered HTML, and Raw Headers tabs
+- **Flexible layout** — collapsible label sidebar and a layout toggle (side-by-side split / horizontal split / list-only)
+- **Export** filtered search results as JSON
+- **Keyboard shortcuts** — `/` search, `j`/`k` navigate, `?` help
+- **Dark editorial theme** with Celigo branding
 
-## Extension Points (good Cursor tasks)
+## Deployment
 
-- **Gmail label parsing** — extract `X-Gmail-Labels` header and filter by label
-- **Attachment detection** — identify MIME parts with `Content-Disposition: attachment`
-- **Export** — download filtered results as CSV or JSON
-- **Virtualized list** — add `react-window` for smoother scrolling in very large mailboxes
-- **Thread grouping** — group by `In-Reply-To` / `References` headers
+Configured for Netlify (`netlify.toml`, `public/_redirects`). `npm run build` emits a static bundle in `dist/`.
+
+## Ideas / backlog
+
+- **Attachment detection** — identify MIME parts with `Content-Disposition: attachment` and offer download
+- **CSV export** — alongside the existing JSON export
+- **Virtualized list** — `react-window` for smoother scrolling in very large mailboxes
+- **Thread grouping** — group mail by `In-Reply-To` / `References` headers
+- **Tests** — parser unit tests for each data type

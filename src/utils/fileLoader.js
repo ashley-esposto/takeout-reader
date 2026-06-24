@@ -1,5 +1,95 @@
 import JSZip from 'jszip'
 
+const CHUNK_SIZE = 32 * 1024 * 1024 // 32 MiB — avoids some Chrome/Windows failures on one-shot reads
+
+function readViaFileReader(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader()
+    fr.onload = () => resolve(fr.result)
+    fr.onerror = () => reject(fr.error || new Error('FileReader could not read this file'))
+    fr.readAsArrayBuffer(file)
+  })
+}
+
+/** Read via slice() + arrayBuffer per chunk — works when a single full-file read fails. */
+async function readViaSliceChunks(file) {
+  const size = file.size
+  const out = new Uint8Array(size)
+  let offset = 0
+  while (offset < size) {
+    const end = Math.min(offset + CHUNK_SIZE, size)
+    const blob = file.slice(offset, end)
+    const buf = await blob.arrayBuffer()
+    out.set(new Uint8Array(buf), offset)
+    offset = end
+  }
+  return out.buffer
+}
+
+/** Read via File.stream() — another path the browser may implement differently. */
+async function readViaStream(file) {
+  if (typeof file.stream !== 'function') {
+    throw new Error('ReadableStream not supported for this file')
+  }
+  const reader = file.stream().getReader()
+  const chunks = []
+  let total = 0
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    chunks.push(value)
+    total += value.byteLength
+  }
+  const out = new Uint8Array(total)
+  let pos = 0
+  for (const c of chunks) {
+    out.set(c, pos)
+    pos += c.byteLength
+  }
+  return out.buffer
+}
+
+/**
+ * Read a user-selected File into an ArrayBuffer using several strategies.
+ * Chrome on Windows sometimes throws NotReadableError on file.arrayBuffer() even for
+ * ordinary local Downloads; chunk / stream reads often still work.
+ */
+async function readFileAsArrayBuffer(file) {
+  const hints =
+    'Try: copy the .zip to another folder (e.g. Desktop), use “Choose file” instead of drag-and-drop, ' +
+    'pause antivirus for this file momentarily, or use Firefox/Edge. ' +
+    'Exports over ~2 GB may exceed what this browser tab can load in memory.'
+
+  // Large files: chunked read first — one-shot arrayBuffer() often fails on multi‑GB zips in Chrome
+  if (file.size > 200 * 1024 * 1024) {
+    try {
+      return await readViaSliceChunks(file)
+    } catch {
+      /* fall through to chain */
+    }
+  }
+
+  try {
+    return await file.arrayBuffer()
+  } catch (e1) {
+    try {
+      return await readViaFileReader(file)
+    } catch (e2) {
+      try {
+        return await readViaSliceChunks(file)
+      } catch (e3) {
+        try {
+          return await readViaStream(file)
+        } catch (e4) {
+          const detail =
+            e4?.message || e3?.message || e2?.message || e1?.message || 'Read failed'
+          throw new Error(`${detail} ${hints}`)
+        }
+      }
+    }
+  }
+}
+
 const CATEGORY_RULES = [
   { key: 'mail',     test: (p) => p.endsWith('.mbox') },
   { key: 'chat',     test: (p) => (p.includes('google chat') || p.includes('hangouts')) && p.endsWith('.json') },
@@ -36,13 +126,19 @@ export async function scanTakeout(file) {
   }
 
   // Read the zip in one go — zip files are typically much smaller than raw mbox
+  let buffer
+  try {
+    buffer = await readFileAsArrayBuffer(file)
+  } catch (err) {
+    throw new Error(`Could not read the zip from your device. ${err.message}`)
+  }
+
   let zip
   try {
-    const buffer = await file.arrayBuffer()
     zip = await JSZip.loadAsync(buffer)
   } catch (err) {
     throw new Error(
-      `Could not open the zip file. Make sure it is a valid, complete Google Takeout archive. (${err.message})`
+      `Could not open the zip file. It may be corrupt or incomplete. (${err.message})`
     )
   }
 
