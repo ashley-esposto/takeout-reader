@@ -39,6 +39,20 @@ export default function EmailList({
 
   const handleScroll = useCallback((e) => setScrollTop(e.target.scrollTop), [])
 
+  // NOTE: all hooks must run before any early return below — otherwise the
+  // hook count changes between renders (e.g. when searchLoading toggles) and
+  // React throws "Rendered fewer hooks than expected".
+  const isSearch   = Array.isArray(searchEmails)
+  const rowCount   = isSearch ? searchEmails.length : total
+  const startIndex = Math.max(0, Math.floor(scrollTop / EMAIL_ROW_HEIGHT) - BUFFER)
+  const endIndex   = Math.min(rowCount, Math.ceil((scrollTop + containerHeight) / EMAIL_ROW_HEIGHT) + BUFFER)
+
+  useEffect(() => {
+    if (!searchLoading && !isSearch && onNeedRange && rowCount > 0) {
+      onNeedRange(startIndex, endIndex)
+    }
+  }, [startIndex, endIndex, isSearch, onNeedRange, rowCount, searchLoading]) // eslint-disable-line
+
   if (searchLoading) {
     return (
       <div className="email-list email-list--loading">
@@ -46,17 +60,6 @@ export default function EmailList({
       </div>
     )
   }
-
-  const isSearch   = Array.isArray(searchEmails)
-  const rowCount   = isSearch ? searchEmails.length : total
-  const startIndex = Math.max(0, Math.floor(scrollTop / EMAIL_ROW_HEIGHT) - BUFFER)
-  const endIndex   = Math.min(rowCount, Math.ceil((scrollTop + containerHeight) / EMAIL_ROW_HEIGHT) + BUFFER)
-
-  useEffect(() => {
-    if (!isSearch && onNeedRange && rowCount > 0) {
-      onNeedRange(startIndex, endIndex)
-    }
-  }, [startIndex, endIndex, isSearch, onNeedRange, rowCount]) // eslint-disable-line
 
   if (rowCount === 0) {
     return (

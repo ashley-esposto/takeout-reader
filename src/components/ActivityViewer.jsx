@@ -25,14 +25,8 @@ export default function ActivityViewer({ items, category }) {
 
   const catLabel = CATEGORY_LABELS[category] || category
 
-  if (items.length === 0) {
-    return (
-      <div className="detail-empty">
-        No {catLabel} data found in this archive.
-      </div>
-    )
-  }
-
+  // All hooks below run before the empty-items early return (further down) so
+  // the hook count stays constant across renders.
   const currentFile = items[selectedFile]
   const fileLabel = currentFile?.name?.split('/').pop() || 'File'
 
@@ -63,6 +57,14 @@ export default function ActivityViewer({ items, category }) {
       return String(c)
     }
   }, [currentFile?.content])
+
+  if (items.length === 0) {
+    return (
+      <div className="detail-empty">
+        No {catLabel} data found in this archive.
+      </div>
+    )
+  }
 
   const countLabel = records.length
     ? `${filtered.length.toLocaleString()} of ${records.length.toLocaleString()} entries`
