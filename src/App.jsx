@@ -398,8 +398,11 @@ export default function App() {
         if (fileHandles.length > 0) {
           startParsing(fileHandles.length === 1 ? fileHandles[0] : fileHandles)
         } else {
-          const contents = await Promise.all(entries.map((e) => e.getContent('string')))
-          startParsing(contents.join('\n\n'))
+          // Zip mode: extract each mbox as a Blob (raw bytes) and feed the
+          // streaming byte scanner — far faster and lighter than decoding the
+          // whole mbox to a giant UTF-16 string and char-scanning it.
+          const blobs = await Promise.all(entries.map((e) => e.getContent('blob')))
+          startParsing(blobs.length === 1 ? blobs[0] : blobs)
         }
         setLoadingCategory(null)
         return
