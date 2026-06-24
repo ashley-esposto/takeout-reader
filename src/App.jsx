@@ -8,6 +8,7 @@ import ChatViewer from './components/ChatViewer'
 import CalendarViewer from './components/CalendarViewer'
 import ContactsViewer from './components/ContactsViewer'
 import ActivityViewer from './components/ActivityViewer'
+import SummaryScreen from './components/SummaryScreen'
 import { useMboxWorker } from './hooks/useMboxWorker'
 import { scanTakeout, scanTakeoutFiles } from './utils/fileLoader'
 import { parseICS } from './utils/icsParser'
@@ -376,9 +377,17 @@ export default function App() {
     }
 
     setTakeout(result)
-    const firstKey = Object.keys(result.categories)[0]
-    if (firstKey) loadCategory(firstKey, result.categories[firstKey], { forceMailReload: true })
+    // Land on the overview rather than eagerly parsing the first category —
+    // keeps the landing instant and lets the user choose where to start.
+    setActiveCategory(null)
   }
+
+  const goOverview = useCallback(() => {
+    setActiveCategory(null)
+    setSelectedEmail(null)
+    setEmailSearch('')
+    setSearchResults(null)
+  }, [])
 
   const loadCategory = useCallback(async (key, entries, options = {}) => {
     const forceMailReload = options.forceMailReload === true
@@ -553,6 +562,7 @@ export default function App() {
           categories={takeout.categories}
           active={activeCategory}
           onSelect={handleCategorySelect}
+          onOverview={goOverview}
           emailCount={totalEmails}
           categoryData={categoryData}
         />
@@ -688,7 +698,12 @@ export default function App() {
             <ActivityViewer items={categoryData[activeCategory] || []} category={activeCategory} />
           )}
           {!activeCategory && (
-            <div className="detail-empty">Choose a section from the left — same idea as switching apps in Google</div>
+            <SummaryScreen
+              categories={takeout.categories}
+              emailCount={totalEmails}
+              categoryData={categoryData}
+              onOpen={handleCategorySelect}
+            />
           )}
         </div>
       </div>

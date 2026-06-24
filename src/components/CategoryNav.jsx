@@ -1,16 +1,16 @@
-const CATEGORY_META = {
-  mail:     { label: 'Mail',             icon: 'mail' },
-  chat:     { label: 'Chat',             icon: 'chat' },
-  calendar: { label: 'Calendar',         icon: 'calendar_month' },
-  contacts: { label: 'Contacts',         icon: 'contacts' },
-  activity: { label: 'My Activity',      icon: 'history' },
-  location: { label: 'Location',         icon: 'location_on' },
-  chrome:   { label: 'Chrome',           icon: 'language' },
-  youtube:  { label: 'YouTube',          icon: 'play_circle' },
-  drive:    { label: 'Drive',            icon: 'folder' },
+export const CATEGORY_META = {
+  mail:     { label: 'Mail',             icon: 'mail',          description: 'Emails from your Gmail export' },
+  chat:     { label: 'Chat',             icon: 'chat',          description: 'Google Chat & Hangouts conversations' },
+  calendar: { label: 'Calendar',         icon: 'calendar_month', description: 'Events and meetings' },
+  contacts: { label: 'Contacts',         icon: 'contacts',      description: 'Saved contacts and details' },
+  activity: { label: 'My Activity',      icon: 'history',       description: 'Your Google activity timeline' },
+  location: { label: 'Location',         icon: 'location_on',   description: 'Location history' },
+  chrome:   { label: 'Chrome',           icon: 'language',      description: 'Browsing history and data' },
+  youtube:  { label: 'YouTube',          icon: 'play_circle',   description: 'Watch and search history' },
+  drive:    { label: 'Drive',            icon: 'folder',        description: 'Drive file activity' },
 }
 
-export default function CategoryNav({ categories, active, onSelect, emailCount, categoryData }) {
+export default function CategoryNav({ categories, active, onSelect, onOverview, emailCount, categoryData }) {
   const available = Object.keys(categories)
 
   function getCount(key) {
@@ -23,6 +23,16 @@ export default function CategoryNav({ categories, active, onSelect, emailCount, 
   return (
     <nav className="category-nav" aria-label="Takeout data">
       <div className="category-nav-header">Google Takeout</div>
+      <button
+        type="button"
+        className={`category-item${active == null ? ' active' : ''}`}
+        onClick={onOverview}
+      >
+        <span className="category-icon">
+          <span className="gmi" aria-hidden>grid_view</span>
+        </span>
+        <span className="category-label">Overview</span>
+      </button>
       {available.map((key) => {
         const meta = CATEGORY_META[key] || { label: key, icon: 'draft' }
         const count = getCount(key)
