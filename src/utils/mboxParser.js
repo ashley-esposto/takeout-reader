@@ -1,49 +1,23 @@
+const DAY_OF_WEEK = /\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/i
+const MONTH = /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/i
+const FOUR_DIGIT_YEAR = /\b(19|20)\d{2}\b/
+
 /**
- * Parse an mbox string into an array of email objects.
- * Called from the Web Worker so it can run off the main thread.
+ * Decide whether a line is a genuine mbox envelope separator ("From " line)
+ * rather than a body line that merely begins with "From ".
+ *
+ * A real envelope line is `From <sender> <asctime-style date>` — the date
+ * always carries a 4-digit year plus a weekday or month abbreviation
+ * (e.g. `From 173… Sat Jan 13 12:00:00 +0000 2024`). Body text such as
+ * "From the desk of…" or "From now on" lacks that date structure, so we
+ * require both a year and a weekday/month token before treating the line as
+ * a message boundary. This prevents one message from being split in two.
  */
-export function parseMbox(mboxText, onProgress) {
-  const emails = []
-
-  // Normalise line endings so the regex works regardless of OS
-  const text = mboxText.replace(/\r\n/g, '\n')
-
-  // mbox separator: a line starting with "From " (with a space).
-  // Some exporters (including Google Takeout) use "From " followed by
-  // an email address or just a date — be as permissive as possible.
-  // We also handle files where the very first line IS the separator.
-  const messageChunks = text.split(/^From [^\n]*/m).filter((c) => c.trim().length > 0)
-
-  // Diagnostic: if nothing found, post a warning back to the UI
-  if (messageChunks.length === 0) {
-    // File may be empty or use an unrecognised format
-    onProgress && onProgress(0, 0)
-    return []
-  }
-
-  const total = messageChunks.length
-
-  let lastProgressTime = 0
-
-  for (let i = 0; i < messageChunks.length; i++) {
-    const raw = messageChunks[i]
-    const email = parseMessage(raw)
-    emails.push(email)
-
-    // Throttled progress: every 200 emails AND max once per 50ms
-    if (onProgress && (i + 1) % 200 === 0) {
-      const now = Date.now()
-      if (now - lastProgressTime >= 50) {
-        onProgress(i + 1, total)
-        lastProgressTime = now
-      }
-    }
-  }
-
-  // Final progress
-  if (onProgress) onProgress(total, total)
-
-  return emails
+export function isMboxFromLine(line) {
+  if (typeof line !== 'string' || !line.startsWith('From ')) return false
+  const rest = line.slice(5).trim()
+  if (!rest) return false
+  return FOUR_DIGIT_YEAR.test(rest) && (DAY_OF_WEEK.test(rest) || MONTH.test(rest))
 }
 
 /**

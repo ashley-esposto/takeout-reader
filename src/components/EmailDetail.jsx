@@ -1,8 +1,28 @@
 import { useState, useEffect } from 'react'
 
+/**
+ * Content-Security-Policy enforced inside the iframe document.
+ * Scripts are always denied (defense-in-depth alongside the missing
+ * `allow-scripts` sandbox flag). When `blockRemote` is true, remote images,
+ * media, and fonts are blocked so tracking pixels can't phone home; only inline
+ * styles and `data:` resources are allowed. Loading remote content relaxes the
+ * image/media/font sources to http(s) on explicit user request.
+ */
+function cspMeta(blockRemote) {
+  const remote = blockRemote ? '' : ' https: http:'
+  const policy = [
+    "default-src 'none'",
+    `img-src data:${remote}`,
+    `media-src data:${remote}`,
+    "style-src 'unsafe-inline'",
+    `font-src data:${remote}`,
+  ].join('; ')
+  return `<meta http-equiv="Content-Security-Policy" content="${policy}">`
+}
+
 /** Wrap message HTML so typography and links are readable in the iframe. */
-function wrapEmailHtmlFragment(html) {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><base target="_blank" rel="noopener">
+function wrapEmailHtmlFragment(html, { blockRemote = true } = {}) {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">${cspMeta(blockRemote)}<base target="_blank" rel="noopener">
 <style>
   html, body { margin: 0; padding: 0; background: #fff; color: #1a1a1a; }
   body {
@@ -68,6 +88,13 @@ function looksLikeHtml(text) {
   return /<[a-z][^>]*>/i.test((text || '').slice(0, 1000))
 }
 
+/** True if the HTML references remote resources (images, media, CSS urls). */
+function hasRemoteContent(html) {
+  if (!html) return false
+  return /(?:src|srcset|background|poster)\s*=\s*["']?\s*(?:https?:)?\/\//i.test(html)
+    || /url\(\s*["']?\s*(?:https?:)?\/\//i.test(html)
+}
+
 /** Decide the best default tab for a loaded email. */
 function bestTab(em) {
   if (!em._bodyLoaded) return 'HTML'
@@ -80,10 +107,13 @@ export default function EmailDetail({ email, bodyLoading = false }) {
   const [tab, setTab] = useState(() => bestTab(email))
   const [htmlBlobUrl, setHtmlBlobUrl] = useState(null)
   const [copyState, setCopyState] = useState('idle')
+  // Remote images/trackers are blocked by default; user can opt in per message.
+  const [loadRemote, setLoadRemote] = useState(false)
 
   // Re-evaluate whenever a new email is selected or its body loads
   useEffect(() => {
     setTab(bestTab(email))
+    setLoadRemote(false)
   }, [email._emailIndex, email._bodyLoaded, email.htmlBody, email.textBody]) // eslint-disable-line
 
   // ── Resolve content ────────────────────────────────────────────────────────
@@ -113,18 +143,20 @@ export default function EmailDetail({ email, bodyLoading = false }) {
     }
   }
 
+  const remoteContentPresent = hasRemoteContent(effectiveHtmlBody)
+
   useEffect(() => {
     if (!effectiveHtmlBody || isLoading) {
       setHtmlBlobUrl(null)
       return undefined
     }
-    const doc = wrapEmailHtmlFragment(effectiveHtmlBody)
+    const doc = wrapEmailHtmlFragment(effectiveHtmlBody, { blockRemote: !loadRemote })
     const url = URL.createObjectURL(new Blob([doc], { type: 'text/html;charset=utf-8' }))
     setHtmlBlobUrl(url)
     return () => {
       URL.revokeObjectURL(url)
     }
-  }, [effectiveHtmlBody, isLoading, email._emailIndex])
+  }, [effectiveHtmlBody, isLoading, email._emailIndex, loadRemote])
 
   // ── Display labels (exclude status flags) ─────────────────────────────────
   const folderLabels = (email._labels || '')
@@ -186,12 +218,29 @@ export default function EmailDetail({ email, bodyLoading = false }) {
           isLoading ? (
             <p className="detail-loading">⏳ Loading…</p>
           ) : effectiveHtmlBody && htmlBlobUrl ? (
-            <iframe
-              className="body-html"
-              src={htmlBlobUrl}
-              sandbox="allow-same-origin"
-              title="Email HTML"
-            />
+            <div className="body-html-wrap">
+              {remoteContentPresent && !loadRemote && (
+                <div className="remote-banner">
+                  <span className="gmi" aria-hidden>visibility_off</span>
+                  <span className="remote-banner-text">
+                    Remote images are blocked to protect your privacy (they can notify the sender you opened this).
+                  </span>
+                  <button
+                    type="button"
+                    className="remote-banner-btn"
+                    onClick={() => setLoadRemote(true)}
+                  >
+                    Load remote content
+                  </button>
+                </div>
+              )}
+              <iframe
+                className="body-html"
+                src={htmlBlobUrl}
+                sandbox="allow-same-origin"
+                title="Email HTML"
+              />
+            </div>
           ) : effectiveHtmlBody ? (
             <p className="detail-loading">Preparing preview…</p>
           ) : (

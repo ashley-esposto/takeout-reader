@@ -13,6 +13,7 @@ import { scanTakeout, scanTakeoutFiles } from './utils/fileLoader'
 import { parseICS } from './utils/icsParser'
 import { parseVCF } from './utils/vcfParser'
 import { parseChat } from './utils/chatParser'
+import { toCSV, toJSON, downloadText, safeStem } from './utils/exporters'
 
 const PAGE_SIZE = 300
 
@@ -461,7 +462,17 @@ export default function App() {
   const displayTotal   = isSearching ? searchTotal : labelTotal
   const displayEmails  = isSearching ? searchResults : null
 
-  const exportSearchResults = useCallback(() => {
+  const EXPORT_COLUMNS = [
+    { key: 'index', label: 'Index' },
+    { key: 'from', label: 'From' },
+    { key: 'to', label: 'To' },
+    { key: 'subject', label: 'Subject' },
+    { key: 'date', label: 'Date' },
+    { key: 'snippet', label: 'Snippet' },
+    { key: 'labels', label: 'Labels' },
+  ]
+
+  const exportSearchResults = useCallback((format) => {
     if (!searchResults?.length) return
     const rows = searchResults.map((e) => ({
       index: e._emailIndex,
@@ -472,14 +483,12 @@ export default function App() {
       snippet: e.snippet,
       labels: e._labels,
     }))
-    const safe = emailSearch.trim().replace(/[^\w\-]+/g, '_').slice(0, 48) || 'query'
-    const blob = new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' })
-    const a = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    a.href = url
-    a.download = `celigo-takeout-search-${safe}.json`
-    a.click()
-    URL.revokeObjectURL(url)
+    const stem = `celigo-takeout-search-${safeStem(emailSearch, 'query')}`
+    if (format === 'csv') {
+      downloadText(`${stem}.csv`, toCSV(rows, EXPORT_COLUMNS), 'text/csv')
+    } else {
+      downloadText(`${stem}.json`, toJSON(rows), 'application/json')
+    }
   }, [searchResults, emailSearch])
 
   const mailSearchBar = takeout && activeCategory === 'mail' ? (
@@ -594,15 +603,25 @@ export default function App() {
                     </div>
                     <div className="mail-folder-toolbar-actions">
                       {isSearching && !searchLoading && searchResults && searchResults.length > 0 && (
-                        <button
-                          type="button"
-                          className="mail-toolbar-btn"
-                          onClick={exportSearchResults}
-                          title="Download the current result list as JSON"
-                        >
-                          <span className="gmi">download</span>
-                          <span>Export</span>
-                        </button>
+                        <div className="mail-export-group" role="group" aria-label="Export results">
+                          <button
+                            type="button"
+                            className="mail-toolbar-btn"
+                            onClick={() => exportSearchResults('csv')}
+                            title="Download the current results as a CSV spreadsheet (opens in Excel)"
+                          >
+                            <span className="gmi">download</span>
+                            <span>Export CSV</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="mail-toolbar-btn mail-toolbar-btn--secondary"
+                            onClick={() => exportSearchResults('json')}
+                            title="Download the current results as JSON"
+                          >
+                            JSON
+                          </button>
+                        </div>
                       )}
                       <span className="mail-toolbar-hint" title="Keyboard shortcuts">
                         / search · j/k · ? help

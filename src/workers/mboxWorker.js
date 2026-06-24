@@ -12,17 +12,16 @@
  *                file slice (~300 emails worth), parses headers, returns.
  *                The slice is a local variable and is GC'd immediately after.
  *
- *  SEARCH      — worker re-scans the file in chunks, filtering on the fly.
- *                Streams partial results every 5 000 matches so the UI
- *                stays responsive during long searches.
+ *  SEARCH      — worker re-scans the file in chunks, filtering on the fly,
+ *                then returns the matching set. Runs off the main thread so
+ *                the UI stays responsive during long searches.
  *
  *  BODY LOAD   — same file-slice approach as before.
  */
 
-import { parseHeadersOnly, parseMessage } from '../utils/mboxParser'
+import { parseHeadersOnly, parseMessage, isMboxFromLine } from '../utils/mboxParser'
 
 const CHUNK_SIZE   = 32 * 1024 * 1024  // 32 MB read chunks during scan
-const PAGE_READ_SAFETY = 1024           // byte padding when reading a page range
 
 /** Byte sequence for "\nFrom " — works for CRLF mbox too (LF is matched inside \r\n). */
 const NEEDLE_NL_FROM = new Uint8Array([0x0a, 0x46, 0x72, 0x6f, 0x6d, 0x20])
@@ -60,18 +59,36 @@ function startsWithFromSpace (bytes, pos) {
   )
 }
 
+const MAX_ENVELOPE_LINE = 2048  // a real "From " envelope line is far shorter
+
 /**
- * Indices in `bytes` where an mbox envelope line begins (the `F` of `From `).
- * Uses raw bytes so offsets stay aligned with file positions under UTF-8.
+ * Indices in `bytes` where a genuine mbox envelope line begins (the `F` of
+ * `From `). Each candidate is validated against {@link isMboxFromLine} so body
+ * lines that merely start with "From " don't split a message.
+ *
+ * A candidate whose envelope line runs past the end of `bytes` (chunk boundary)
+ * is kept unconditionally: the caller carries it into the next chunk as
+ * leftover, where the complete line is re-validated.
  */
 function findMessageStartIndices (bytes) {
   const starts = []
-  if (bytes.length >= 5 && startsWithFromSpace(bytes, 0)) starts.push(0)
+  const consider = (pos) => {
+    let end = pos
+    const lim = Math.min(bytes.length, pos + MAX_ENVELOPE_LINE)
+    while (end < lim && bytes[end] !== 0x0a) end++
+    // No newline before the buffer ended → line is truncated by the chunk split.
+    if (end === bytes.length && end - pos < MAX_ENVELOPE_LINE) {
+      starts.push(pos)
+      return
+    }
+    if (isMboxFromLine(decodeUtf8(bytes.subarray(pos, end)))) starts.push(pos)
+  }
+  if (bytes.length >= 5 && startsWithFromSpace(bytes, 0)) consider(0)
   let p = 0
   while (p + 6 <= bytes.length) {
     const hit = indexOfBytes(bytes, NEEDLE_NL_FROM, p)
     if (hit === -1) break
-    starts.push(hit + 1)
+    consider(hit + 1)
     p = hit + 1
   }
   return starts
@@ -185,14 +202,19 @@ async function scanSingleFile (file) {
 function scanText (text) {
   _textSource = text.replace(/\r\n/g, '\n')
 
-  // Collect positions of every "From " envelope line
+  // Collect positions of every genuine "From " envelope line. Lines that merely
+  // start with "From " inside a body are rejected so messages don't split.
+  const isEnvelopeAt = (start) => {
+    const eol = _textSource.indexOf('\n', start)
+    return isMboxFromLine(_textSource.slice(start, eol === -1 ? _textSource.length : eol))
+  }
   const fromLinePositions = []
-  if (_textSource.startsWith('From ')) fromLinePositions.push(0)
+  if (_textSource.startsWith('From ') && isEnvelopeAt(0)) fromLinePositions.push(0)
   let pos = 0
   while (true) {
     const idx = _textSource.indexOf('\nFrom ', pos)
     if (idx === -1) break
-    fromLinePositions.push(idx + 1)
+    if (isEnvelopeAt(idx + 1)) fromLinePositions.push(idx + 1)
     pos = idx + 1
   }
 
@@ -420,85 +442,6 @@ async function parseIndicesFromFileSameFile (indices) {
   )
   for (const { slot, meta } of batch) {
     results[slot] = meta
-  }
-  return results
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  Helpers — range-based parsing (legacy, kept for compatibility)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Parse headers for index range [start, end) from the in-memory text string. */
-function parseRangeFromText (start, end) {
-  const emails = []
-  for (let i = start; i < end; i++) {
-    const raw  = _textSource.slice(_starts[i], _ends[i])
-    const meta = parseHeadersOnly(raw)
-    meta._emailIndex = i
-    meta._labels = _labels[i] || ''
-    emails.push(meta)
-  }
-  return emails
-}
-
-/**
- * Parse headers for index range [start, end) from the file.
- * Reads ONE file slice covering the whole range (efficient).
- */
-async function parseRangeFromFile (start, end) {
-  if (!_files.length) return []
-  const file = _files[_fileIndex[start]]
-  const rangeByteStart = Math.max(0, _starts[start] - PAGE_READ_SAFETY)
-  const rangeByteEnd   = Math.min(file.size, _ends[end - 1] + PAGE_READ_SAFETY)
-
-  const buffer  = await file.slice(rangeByteStart, rangeByteEnd).arrayBuffer()
-  const decoder = new TextDecoder('utf-8', { fatal: false })
-  const text    = decoder.decode(buffer)
-
-  // Re-find "From " boundaries within this slice
-  const boundaries = []
-  if (text.startsWith('From ')) boundaries.push(0)
-  let sp = 0
-  while (true) {
-    const idx = text.indexOf('\nFrom ', sp)
-    if (idx === -1) break
-    boundaries.push(idx + 1)
-    sp = idx + 1
-  }
-
-  const emails = []
-  const take   = Math.min(end - start, boundaries.length)
-
-  for (let i = 0; i < take; i++) {
-    const bStart = boundaries[i]
-    const bEnd   = i + 1 < boundaries.length ? boundaries[i + 1] - 1 : text.length
-
-    const msgText = text.slice(bStart, bEnd)
-    const firstNL = msgText.indexOf('\n')
-    const emailRaw = firstNL > -1 ? msgText.substring(firstNL + 1) : msgText
-
-    const meta = parseHeadersOnly(emailRaw)
-    meta._emailIndex = start + i
-    meta._byteStart  = _starts[start + i]
-    meta._byteEnd    = _ends[start + i]
-    meta._labels = _labels[start + i] || ''
-    emails.push(meta)
-  }
-
-  // buffer, text, and boundaries are local — GC'd here
-  return emails
-}
-
-/** Full-text-mode search (all in memory, synchronous). Unused — kept for reference. */
-function searchInText (q) {
-  const results = []
-  for (let i = 0; i < _starts.length; i++) {
-    const raw = _textSource.slice(_starts[i], _ends[i])
-    if (!raw.toLowerCase().includes(q)) continue
-    const meta = parseHeadersOnly(raw)
-    meta._emailIndex = i
-    meta._labels = _labels[i] || ''
-    results.push(meta)
   }
   return results
 }
