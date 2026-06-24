@@ -9,6 +9,7 @@ import CalendarViewer from './components/CalendarViewer'
 import ContactsViewer from './components/ContactsViewer'
 import ActivityViewer from './components/ActivityViewer'
 import SummaryScreen from './components/SummaryScreen'
+import FilesViewer from './components/FilesViewer'
 import { useMboxWorker } from './hooks/useMboxWorker'
 import { scanTakeout, scanTakeoutFiles } from './utils/fileLoader'
 import { parseICS } from './utils/icsParser'
@@ -443,6 +444,11 @@ export default function App() {
         }
         setCategoryData((prev) => ({ ...prev, contacts }))
 
+      } else if (key === 'other') {
+        // Universal fallback: store the entry list as-is; FilesViewer reads
+        // each file's content lazily on demand.
+        setCategoryData((prev) => ({ ...prev, other: entries }))
+
       } else {
         const items = []
         for (const entry of entries.slice(0, 10)) {
@@ -696,6 +702,9 @@ export default function App() {
           )}
           {['activity', 'location', 'chrome', 'youtube', 'drive'].includes(activeCategory) && (
             <ActivityViewer items={categoryData[activeCategory] || []} category={activeCategory} />
+          )}
+          {activeCategory === 'other' && (
+            <FilesViewer files={categoryData.other || []} />
           )}
           {!activeCategory && (
             <SummaryScreen

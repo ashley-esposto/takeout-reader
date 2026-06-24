@@ -51,6 +51,16 @@ export function downloadText(filename, content, mimeType) {
   URL.revokeObjectURL(url)
 }
 
+/** Trigger a browser download of an arbitrary Blob (e.g. an original archive file). */
+export function downloadBlob(filename, blob) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 /** Build a filesystem-safe filename stem from a label. */
 export function safeStem(label, fallback = 'export') {
   return String(label || '').trim().replace(/[^\w\-]+/g, '_').slice(0, 48) || fallback

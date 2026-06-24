@@ -148,8 +148,8 @@ export async function scanTakeout(file) {
   for (const entry of allEntries) {
     const pathLower = entry.name.toLowerCase()
     const rule = CATEGORY_RULES.find((r) => r.test(pathLower))
-    const key = rule ? rule.key : null
-    if (!key) continue
+    // Unrecognized files land in "other" so nothing in the archive is invisible.
+    const key = rule ? rule.key : 'other'
 
     if (!categories[key]) categories[key] = []
     categories[key].push({
@@ -158,9 +158,16 @@ export async function scanTakeout(file) {
     })
   }
 
+  // Keep "Other files" last in the nav / overview ordering.
+  if (categories.other) {
+    const other = categories.other
+    delete categories.other
+    categories.other = other
+  }
+
   if (Object.keys(categories).length === 0) {
     throw new Error(
-      'No recognizable Google Takeout data found in this zip. ' +
+      'No data found in this zip. ' +
       'Make sure you are uploading a Google Takeout export (from takeout.google.com).'
     )
   }

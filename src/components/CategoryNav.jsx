@@ -8,6 +8,7 @@ export const CATEGORY_META = {
   chrome:   { label: 'Chrome',           icon: 'language',      description: 'Browsing history and data' },
   youtube:  { label: 'YouTube',          icon: 'play_circle',   description: 'Watch and search history' },
   drive:    { label: 'Drive',            icon: 'folder',        description: 'Drive file activity' },
+  other:    { label: 'Other files',      icon: 'draft',         description: 'Everything else in the archive' },
 }
 
 export default function CategoryNav({ categories, active, onSelect, onOverview, emailCount, categoryData }) {
