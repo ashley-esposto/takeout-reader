@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import ExportMenu from './ExportMenu'
+import PaneResizer from './PaneResizer'
+import { useResizableSize } from '../hooks/useResizableSize'
 
 const CALENDAR_COLUMNS = [
   { key: 'start', label: 'Start' },
@@ -15,6 +17,7 @@ const CALENDAR_COLUMNS = [
 export default function CalendarViewer({ events }) {
   const [selected, setSelected] = useState(null)
   const [search, setSearch] = useState('')
+  const [sbW, onSbDelta, resetSb] = useResizableSize('tr.viewerSidebarW', 260, 180, 520)
 
   const sorted = [...events].sort((a, b) => {
     if (!a.start) return 1
@@ -32,7 +35,7 @@ export default function CalendarViewer({ events }) {
 
   return (
     <div className="reader-layout inner">
-      <aside className="sidebar">
+      <aside className="sidebar" style={{ width: sbW, minWidth: sbW, flex: 'none' }}>
         <div className="sidebar-header">
           <span className="sidebar-title">{events.length.toLocaleString()} events</span>
           <input
@@ -78,6 +81,8 @@ export default function CalendarViewer({ events }) {
           ))}
         </div>
       </aside>
+
+      <PaneResizer orientation="vertical" onDelta={onSbDelta} onReset={resetSb} />
 
       <main className="detail-pane">
         {selected ? (

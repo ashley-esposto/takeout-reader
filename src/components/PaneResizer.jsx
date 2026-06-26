@@ -8,8 +8,9 @@ import { useRef } from 'react'
  *   (resizes height).
  * @param {(deltaPx: number) => void} onDelta - called with the incremental
  *   movement (px) along the resize axis on each pointer move.
+ * @param {() => void} [onReset] - called on double-click (restore default size).
  */
-export default function PaneResizer({ orientation = 'vertical', onDelta }) {
+export default function PaneResizer({ orientation = 'vertical', onDelta, onReset }) {
   const last = useRef(null)
 
   function onPointerDown(e) {
@@ -42,10 +43,12 @@ export default function PaneResizer({ orientation = 'vertical', onDelta }) {
       role="separator"
       aria-orientation={orientation === 'vertical' ? 'vertical' : 'horizontal'}
       tabIndex={-1}
+      title={onReset ? 'Drag to resize · double-click to reset' : 'Drag to resize'}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={end}
       onPointerCancel={end}
+      onDoubleClick={onReset}
     />
   )
 }

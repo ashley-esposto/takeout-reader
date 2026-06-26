@@ -638,6 +638,7 @@ export default function App() {
                 <PaneResizer
                   orientation="vertical"
                   onDelta={(d) => setSidebarWidth((w) => clamp(w + d, 160, 480))}
+                  onReset={() => setSidebarWidth(260)}
                 />
               )}
 
@@ -724,12 +725,14 @@ export default function App() {
                   <PaneResizer
                     orientation="vertical"
                     onDelta={(d) => setListWidth((w) => clamp(w + d, 280, 900))}
+                    onReset={() => setListWidth(460)}
                   />
                 )}
                 {viewMode === 'horizontal' && (
                   <PaneResizer
                     orientation="horizontal"
                     onDelta={(d) => setListHeight((h) => clamp(h + d, 140, 760))}
+                    onReset={() => setListHeight(320)}
                   />
                 )}
 

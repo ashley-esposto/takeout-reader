@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import ExportMenu from './ExportMenu'
+import PaneResizer from './PaneResizer'
+import { useResizableSize } from '../hooks/useResizableSize'
 
 const CONTACTS_COLUMNS = [
   { key: 'name', label: 'Name' },
@@ -15,6 +17,7 @@ const CONTACTS_COLUMNS = [
 export default function ContactsViewer({ contacts }) {
   const [selected, setSelected] = useState(null)
   const [search, setSearch] = useState('')
+  const [sbW, onSbDelta, resetSb] = useResizableSize('tr.viewerSidebarW', 260, 180, 520)
 
   const filtered = contacts.filter(
     (c) =>
@@ -26,7 +29,7 @@ export default function ContactsViewer({ contacts }) {
 
   return (
     <div className="reader-layout inner">
-      <aside className="sidebar">
+      <aside className="sidebar" style={{ width: sbW, minWidth: sbW, flex: 'none' }}>
         <div className="sidebar-header">
           <span className="sidebar-title">{contacts.length.toLocaleString()} contacts</span>
           <input
@@ -69,6 +72,8 @@ export default function ContactsViewer({ contacts }) {
           ))}
         </div>
       </aside>
+
+      <PaneResizer orientation="vertical" onDelta={onSbDelta} onReset={resetSb} />
 
       <main className="detail-pane">
         {selected ? (

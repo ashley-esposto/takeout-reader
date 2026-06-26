@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import ExportMenu from './ExportMenu'
+import PaneResizer from './PaneResizer'
+import { useResizableSize } from '../hooks/useResizableSize'
 import { downloadBlob } from '../utils/exporters'
 
 // Extensions we can usefully render as text in the browser.
@@ -28,6 +30,7 @@ export default function FilesViewer({ files }) {
   const [selected, setSelected] = useState(null)
   const [content, setContent] = useState('')
   const [status, setStatus] = useState('idle') // idle | loading | text | binary | error
+  const [sbW, onSbDelta, resetSb] = useResizableSize('tr.viewerSidebarW', 260, 180, 520)
 
   const filtered = files.filter(
     (f) => !search || f.name.toLowerCase().includes(search.toLowerCase())
@@ -65,7 +68,7 @@ export default function FilesViewer({ files }) {
 
   return (
     <div className="reader-layout inner">
-      <aside className="sidebar">
+      <aside className="sidebar" style={{ width: sbW, minWidth: sbW, flex: 'none' }}>
         <div className="sidebar-header">
           <span className="sidebar-title">{files.length.toLocaleString()} files</span>
           <input
@@ -99,6 +102,8 @@ export default function FilesViewer({ files }) {
           ))}
         </div>
       </aside>
+
+      <PaneResizer orientation="vertical" onDelta={onSbDelta} onReset={resetSb} />
 
       <main className="detail-pane">
         {selected ? (

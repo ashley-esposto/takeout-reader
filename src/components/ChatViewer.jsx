@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import ExportMenu from './ExportMenu'
+import PaneResizer from './PaneResizer'
+import { useResizableSize } from '../hooks/useResizableSize'
 
 const CHAT_COLUMNS = [
   { key: 'conversation', label: 'Conversation' },
@@ -13,6 +15,7 @@ const CHAT_COLUMNS = [
 export default function ChatViewer({ conversations }) {
   const [selected, setSelected] = useState(null)
   const [search, setSearch] = useState('')
+  const [sbW, onSbDelta, resetSb] = useResizableSize('tr.viewerSidebarW', 260, 180, 520)
 
   const filtered = conversations.filter(
     (c) =>
@@ -23,7 +26,7 @@ export default function ChatViewer({ conversations }) {
 
   return (
     <div className="reader-layout inner">
-      <aside className="sidebar">
+      <aside className="sidebar" style={{ width: sbW, minWidth: sbW, flex: 'none' }}>
         <div className="sidebar-header">
           <span className="sidebar-title">
             {conversations.length.toLocaleString()} conversations
@@ -72,6 +75,8 @@ export default function ChatViewer({ conversations }) {
           ))}
         </div>
       </aside>
+
+      <PaneResizer orientation="vertical" onDelta={onSbDelta} onReset={resetSb} />
 
       <main className="detail-pane">
         {selected ? (
