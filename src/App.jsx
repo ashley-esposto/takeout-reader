@@ -10,6 +10,7 @@ import ContactsViewer from './components/ContactsViewer'
 import ActivityViewer from './components/ActivityViewer'
 import SummaryScreen from './components/SummaryScreen'
 import FilesViewer from './components/FilesViewer'
+import PaneResizer from './components/PaneResizer'
 import { useMboxWorker } from './hooks/useMboxWorker'
 import { scanTakeout, scanTakeoutFiles } from './utils/fileLoader'
 import { parseICS } from './utils/icsParser'
@@ -18,6 +19,14 @@ import { parseChat } from './utils/chatParser'
 import { toCSV, toJSON, downloadText, safeStem } from './utils/exporters'
 
 const PAGE_SIZE = 300
+
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
+function readNum(key, fallback) {
+  try {
+    const v = parseInt(localStorage.getItem(key), 10)
+    return Number.isFinite(v) ? v : fallback
+  } catch { return fallback }
+}
 
 /** Material Symbols names for Gmail-style folder labels */
 function getLabelMaterialIcon(name) {
@@ -105,6 +114,14 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   // viewMode: 'split' = side-by-side, 'horizontal' = list above/detail below, 'list' = list only
   const [viewMode, setViewMode] = useState('split')
+  // Adjustable pane sizes (persisted). listWidth applies in split mode,
+  // listHeight in horizontal mode.
+  const [sidebarWidth, setSidebarWidth] = useState(() => readNum('tr.sidebarW', 260))
+  const [listWidth, setListWidth]       = useState(() => readNum('tr.listW', 460))
+  const [listHeight, setListHeight]     = useState(() => readNum('tr.listH', 320))
+  useEffect(() => { try { localStorage.setItem('tr.sidebarW', sidebarWidth) } catch {} }, [sidebarWidth])
+  useEffect(() => { try { localStorage.setItem('tr.listW', listWidth) } catch {} }, [listWidth])
+  useEffect(() => { try { localStorage.setItem('tr.listH', listHeight) } catch {} }, [listHeight])
   function cycleViewMode() {
     setViewMode(m => m === 'split' ? 'horizontal' : m === 'horizontal' ? 'list' : 'split')
   }
@@ -583,7 +600,11 @@ export default function App() {
         <div className="category-area">
           {activeCategory === 'mail' && (
             <div className={`mail-split mail-split--${viewMode}`}>
-              <aside className={`mail-sidebar${sidebarCollapsed ? ' mail-sidebar--collapsed' : ''}`} aria-label="Labels">
+              <aside
+                className={`mail-sidebar${sidebarCollapsed ? ' mail-sidebar--collapsed' : ''}`}
+                aria-label="Labels"
+                style={sidebarCollapsed ? undefined : { width: sidebarWidth, minWidth: sidebarWidth, flex: 'none' }}
+              >
                 <div className="label-nav">
                   <button
                     type="button"
@@ -613,8 +634,22 @@ export default function App() {
                 </div>
               </aside>
 
+              {!sidebarCollapsed && (
+                <PaneResizer
+                  orientation="vertical"
+                  onDelta={(d) => setSidebarWidth((w) => clamp(w + d, 160, 480))}
+                />
+              )}
+
               <div className="mail-content-area">
-                <div className="mail-list-column">
+                <div
+                  className="mail-list-column"
+                  style={
+                    viewMode === 'split' ? { flex: 'none', width: listWidth }
+                    : viewMode === 'horizontal' ? { flex: 'none', height: listHeight }
+                    : undefined
+                  }
+                >
                   <div className="mail-folder-toolbar">
                     <div className="mail-folder-toolbar-main">
                       <span className="gmi">{folderToolbarIcon(activeLabel, inSearchMode)}</span>
@@ -684,6 +719,19 @@ export default function App() {
                     onSelect={handleEmailSelect}
                   />
                 </div>
+
+                {viewMode === 'split' && (
+                  <PaneResizer
+                    orientation="vertical"
+                    onDelta={(d) => setListWidth((w) => clamp(w + d, 280, 900))}
+                  />
+                )}
+                {viewMode === 'horizontal' && (
+                  <PaneResizer
+                    orientation="horizontal"
+                    onDelta={(d) => setListHeight((h) => clamp(h + d, 140, 760))}
+                  />
+                )}
 
                 <main className="detail-pane">
                   {selectedEmail ? (

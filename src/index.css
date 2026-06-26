@@ -457,6 +457,27 @@ body {
 .mail-view-btn:hover { background: var(--gm-row-hover); }
 .mail-view-btn .gmi { font-size: 20px; color: var(--gm-text-sec); }
 
+/* Draggable dividers between panels */
+.pane-resizer { flex: none; position: relative; z-index: 3; background: transparent; }
+.pane-resizer::after { content: ''; position: absolute; background: var(--gm-border); transition: background 0.12s; }
+.pane-resizer--vertical { width: 7px; margin: 0 -4px; cursor: col-resize; }
+.pane-resizer--vertical::after { top: 0; bottom: 0; left: 50%; width: 1px; transform: translateX(-50%); }
+.pane-resizer--horizontal { height: 7px; margin: -4px 0; cursor: row-resize; }
+.pane-resizer--horizontal::after { left: 0; right: 0; top: 50%; height: 1px; transform: translateY(-50%); }
+.pane-resizer:hover::after, .pane-resizer:active::after {
+  background: var(--gm-blue);
+  box-shadow: 0 0 0 1px var(--gm-blue);
+}
+
+/* While dragging a divider: lock selection and stop the email iframe from
+   swallowing pointer events. */
+body.resizing-x, body.resizing-y { user-select: none; }
+body.resizing-x { cursor: col-resize; }
+body.resizing-y { cursor: row-resize; }
+body.resizing-x .body-html, body.resizing-y .body-html { pointer-events: none; }
+/* Track the pointer crisply while dragging (the sidebar otherwise eases). */
+body.resizing-x .mail-sidebar, body.resizing-y .mail-sidebar { transition: none; }
+
 /* List column + toolbar */
 .mail-list-column {
   flex: 1;
