@@ -77,7 +77,7 @@ function GmailTopBar({ center, simple }) {
       </div>
       {center}
       <div className="gmail-top-right">
-        <span className="gmail-privacy-hint">Runs locally in your browser</span>
+        <span className="gmail-privacy-hint">Runs in this browser session</span>
       </div>
     </header>
   )
@@ -601,7 +601,7 @@ export default function App() {
           <h1 className="app-title">Open your <strong>Google Takeout</strong></h1>
           <p className="app-subtitle">
             Drop Takeout .zip archives and/or Gmail .mbox files — the same exports you get from Google.
-            Everything stays on this computer.
+            Everything runs in this browser session; nothing is uploaded. Refreshing the page clears it, so you'll re-open your files.
           </p>
           <UploadZone onFiles={handleFiles} />
           {scanError && <p className="upload-error">{scanError}</p>}

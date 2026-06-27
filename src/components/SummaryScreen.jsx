@@ -26,7 +26,7 @@ export default function SummaryScreen({ categories, emailCount, categoryData, on
         <h1 className="summary-title">Your Google Takeout</h1>
         <p className="summary-sub">
           {keys.length} data {keys.length === 1 ? 'type' : 'types'} found. Pick a section to explore —
-          everything stays on this computer.
+          everything runs in this browser session.
         </p>
       </div>
       <div className="summary-grid">
