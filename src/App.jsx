@@ -122,6 +122,13 @@ export default function App() {
   useEffect(() => { try { localStorage.setItem('tr.sidebarW', sidebarWidth) } catch {} }, [sidebarWidth])
   useEffect(() => { try { localStorage.setItem('tr.listW', listWidth) } catch {} }, [listWidth])
   useEffect(() => { try { localStorage.setItem('tr.listH', listHeight) } catch {} }, [listHeight])
+  // Row density: 'comfortable' | 'compact' (persisted)
+  const [density, setDensity] = useState(() => {
+    try { return localStorage.getItem('tr.density') === 'compact' ? 'compact' : 'comfortable' } catch { return 'comfortable' }
+  })
+  useEffect(() => { try { localStorage.setItem('tr.density', density) } catch {} }, [density])
+  // Multi-select for bulk export (set of row indices into the current view)
+  const [selectedIndices, setSelectedIndices] = useState(() => new Set())
   function cycleViewMode() {
     setViewMode(m => m === 'split' ? 'horizontal' : m === 'horizontal' ? 'list' : 'split')
   }
@@ -533,6 +540,39 @@ export default function App() {
     }
   }, [searchResults, emailSearch])
 
+  // ── Multi-select bulk export ──────────────────────────────────────────────
+  const toggleSelect = useCallback((idx) => {
+    setSelectedIndices((prev) => {
+      const next = new Set(prev)
+      if (next.has(idx)) next.delete(idx)
+      else next.add(idx)
+      return next
+    })
+  }, [])
+  const clearSelection = useCallback(() => setSelectedIndices(new Set()), [])
+  const selectAllResults = useCallback(() => {
+    if (!displayEmails) return
+    setSelectedIndices(new Set(displayEmails.map((_, i) => i)))
+  }, [displayEmails])
+  const exportSelected = useCallback((format) => {
+    const resolve = (idx) => (displayEmails ? displayEmails[idx] : emailsMap.current.get(idx))
+    const rows = [...selectedIndices].map(resolve).filter(Boolean).map((e) => ({
+      index: e._emailIndex,
+      from: e.from, to: e.to, subject: e.subject,
+      date: e.date, snippet: e.snippet, labels: e._labels,
+    }))
+    if (!rows.length) return
+    const stem = `celigo-takeout-selected-${rows.length}`
+    if (format === 'csv') {
+      downloadText(`${stem}.csv`, toCSV(rows, EXPORT_COLUMNS), 'text/csv')
+    } else {
+      downloadText(`${stem}.json`, toJSON(rows), 'application/json')
+    }
+  }, [selectedIndices, displayEmails])
+
+  // Clear selection whenever the visible result set changes.
+  useEffect(() => { setSelectedIndices(new Set()) }, [activeLabel, emailSearch, activeCategory])
+
   const mailSearchBar = takeout && activeCategory === 'mail' ? (
     <div className="gmail-search-wrap">
       <label className="gmail-search-inner" htmlFor="mail-search-input">
@@ -652,25 +692,34 @@ export default function App() {
                   }
                 >
                   <div className="mail-folder-toolbar">
-                    <div className="mail-folder-toolbar-main">
-                      <span className="gmi">{folderToolbarIcon(activeLabel, inSearchMode)}</span>
-                      <h2 className="mail-folder-title">
-                        {inSearchMode ? 'Search results' : folderTitle(activeLabel)}
-                      </h2>
-                      <span className="mail-folder-meta">
-                        {inSearchMode
-                          ? (searchLoading ? 'Searching…' : `${searchTotal.toLocaleString()} found`)
-                          : `${displayTotal.toLocaleString()} conversations`}
-                      </span>
-                    </div>
-                    <div className="mail-folder-toolbar-actions">
-                      {isSearching && !searchLoading && searchResults && searchResults.length > 0 && (
-                        <div className="mail-export-group" role="group" aria-label="Export results">
+                    {selectedIndices.size > 0 ? (
+                      <div className="mail-selection-bar">
+                        <button
+                          type="button"
+                          className="mail-view-btn"
+                          onClick={clearSelection}
+                          title="Clear selection"
+                        >
+                          <span className="gmi">close</span>
+                        </button>
+                        <span className="mail-selection-count">
+                          {selectedIndices.size.toLocaleString()} selected
+                        </span>
+                        {displayEmails && selectedIndices.size < displayEmails.length && (
+                          <button
+                            type="button"
+                            className="mail-toolbar-btn mail-toolbar-btn--secondary"
+                            onClick={selectAllResults}
+                          >
+                            Select all {displayEmails.length.toLocaleString()}
+                          </button>
+                        )}
+                        <div className="mail-export-group" role="group" aria-label="Export selected">
                           <button
                             type="button"
                             className="mail-toolbar-btn"
-                            onClick={() => exportSearchResults('csv')}
-                            title="Download the current results as a CSV spreadsheet (opens in Excel)"
+                            onClick={() => exportSelected('csv')}
+                            title="Export selected messages as a CSV spreadsheet"
                           >
                             <span className="gmi">download</span>
                             <span>Export CSV</span>
@@ -678,36 +727,81 @@ export default function App() {
                           <button
                             type="button"
                             className="mail-toolbar-btn mail-toolbar-btn--secondary"
-                            onClick={() => exportSearchResults('json')}
-                            title="Download the current results as JSON"
+                            onClick={() => exportSelected('json')}
+                            title="Export selected messages as JSON"
                           >
                             JSON
                           </button>
                         </div>
-                      )}
-                      <span className="mail-toolbar-hint" title="Keyboard shortcuts">
-                        / search · j/k · ? help
-                      </span>
-                      <div className="mail-view-controls" role="group" aria-label="Layout">
-                        <button
-                          type="button"
-                          className="mail-view-btn"
-                          onClick={() => setSidebarCollapsed(v => !v)}
-                          title={sidebarCollapsed ? 'Show labels panel' : 'Hide labels panel'}
-                          aria-pressed={!sidebarCollapsed}
-                        >
-                          <span className="gmi">{sidebarCollapsed ? 'left_panel_open' : 'left_panel_close'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="mail-view-btn"
-                          onClick={cycleViewMode}
-                          title={VIEW_MODE_TITLE[viewMode]}
-                        >
-                          <span className="gmi">{VIEW_MODE_ICON[viewMode]}</span>
-                        </button>
                       </div>
-                    </div>
+                    ) : (
+                      <>
+                        <div className="mail-folder-toolbar-main">
+                          <span className="gmi">{folderToolbarIcon(activeLabel, inSearchMode)}</span>
+                          <h2 className="mail-folder-title">
+                            {inSearchMode ? 'Search results' : folderTitle(activeLabel)}
+                          </h2>
+                          <span className="mail-folder-meta">
+                            {inSearchMode
+                              ? (searchLoading ? 'Searching…' : `${searchTotal.toLocaleString()} found`)
+                              : `${displayTotal.toLocaleString()} conversations`}
+                          </span>
+                        </div>
+                        <div className="mail-folder-toolbar-actions">
+                          {isSearching && !searchLoading && searchResults && searchResults.length > 0 && (
+                            <div className="mail-export-group" role="group" aria-label="Export results">
+                              <button
+                                type="button"
+                                className="mail-toolbar-btn"
+                                onClick={() => exportSearchResults('csv')}
+                                title="Download the current results as a CSV spreadsheet (opens in Excel)"
+                              >
+                                <span className="gmi">download</span>
+                                <span>Export CSV</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="mail-toolbar-btn mail-toolbar-btn--secondary"
+                                onClick={() => exportSearchResults('json')}
+                                title="Download the current results as JSON"
+                              >
+                                JSON
+                              </button>
+                            </div>
+                          )}
+                          <span className="mail-toolbar-hint" title="Keyboard shortcuts">
+                            / search · j/k · ? help
+                          </span>
+                          <div className="mail-view-controls" role="group" aria-label="Layout">
+                            <button
+                              type="button"
+                              className="mail-view-btn"
+                              onClick={() => setSidebarCollapsed(v => !v)}
+                              title={sidebarCollapsed ? 'Show labels panel' : 'Hide labels panel'}
+                              aria-pressed={!sidebarCollapsed}
+                            >
+                              <span className="gmi">{sidebarCollapsed ? 'left_panel_open' : 'left_panel_close'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="mail-view-btn"
+                              onClick={() => setDensity(d => d === 'comfortable' ? 'compact' : 'comfortable')}
+                              title={density === 'comfortable' ? 'Compact rows' : 'Comfortable rows'}
+                            >
+                              <span className="gmi">{density === 'comfortable' ? 'density_small' : 'density_medium'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="mail-view-btn"
+                              onClick={cycleViewMode}
+                              title={VIEW_MODE_TITLE[viewMode]}
+                            >
+                              <span className="gmi">{VIEW_MODE_ICON[viewMode]}</span>
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                   <EmailList
                     total={displayTotal}
@@ -718,6 +812,9 @@ export default function App() {
                     onNeedRange={handleNeedRange}
                     selected={selectedEmail}
                     onSelect={handleEmailSelect}
+                    density={density}
+                    selectedIndices={selectedIndices}
+                    onToggleSelect={toggleSelect}
                   />
                 </div>
 

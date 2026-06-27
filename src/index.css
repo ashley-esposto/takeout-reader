@@ -667,6 +667,32 @@ body.resizing-x .mail-sidebar, body.resizing-y .mail-sidebar { transition: none;
   user-select: none;
 }
 .email-item-row > .avatar { align-self: center; }
+
+/* Multi-select checkbox (reveals on row hover; persists when checked) */
+.email-item-check {
+  margin-top: 2px;
+  color: var(--gm-text-sec);
+  opacity: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.1s, color 0.1s;
+}
+.email-item:hover .email-item-check,
+.email-item-check.checked { opacity: 1; }
+.email-item-check.checked { color: var(--gm-blue); }
+.email-item--selected { background: var(--gm-row-sel); }
+.email-item--selected:hover { background: var(--gm-row-sel); }
+
+/* Compact density */
+.email-list--compact .email-item { height: 56px; padding-top: 7px; padding-bottom: 7px; }
+.email-list--compact .email-item-row { align-items: center; }
+.email-list--compact .email-line-1 { margin-bottom: 0; }
+.email-list--compact .email-labels { display: none; }
+
+/* Bulk-selection toolbar (replaces the folder toolbar while selecting) */
+.mail-selection-bar { flex: 1; display: flex; align-items: center; gap: 12px; }
+.mail-selection-count { font-size: 14px; font-weight: 600; color: var(--gm-text); }
+.mail-selection-bar .mail-export-group { margin-left: auto; }
 .email-line-1 {
   display: flex;
   align-items: baseline;
