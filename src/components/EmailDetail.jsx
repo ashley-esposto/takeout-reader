@@ -1,4 +1,27 @@
 import { useState, useEffect } from 'react'
+import Avatar from './Avatar'
+import { parseAddress, splitAddresses } from '../utils/address'
+
+/** Full, readable timestamp for the reading pane (e.g. "Mon, Jan 1, 2024, 9:30 AM"). */
+function formatFullDate(dateStr) {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return dateStr
+  return d.toLocaleString(undefined, {
+    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+  })
+}
+
+/** "to me", "to a@x.com", "to a@x.com, b@y.com" style summary for recipients. */
+function recipientsSummary(toRaw) {
+  const list = splitAddresses(toRaw)
+  if (list.length === 0) return ''
+  const label = (a) => a.name || a.email
+  if (list.length === 1) return `to ${label(list[0])}`
+  if (list.length === 2) return `to ${label(list[0])}, ${label(list[1])}`
+  return `to ${label(list[0])}, ${label(list[1])} +${list.length - 2}`
+}
 
 /**
  * Content-Security-Policy enforced inside the iframe document.
@@ -109,6 +132,9 @@ export default function EmailDetail({ email, bodyLoading = false }) {
   const [copyState, setCopyState] = useState('idle')
   // Remote images/trackers are blocked by default; user can opt in per message.
   const [loadRemote, setLoadRemote] = useState(false)
+  // Gmail-style collapsed recipients ("to me ▾"), expandable to full headers.
+  const [recipientsOpen, setRecipientsOpen] = useState(false)
+  useEffect(() => { setRecipientsOpen(false) }, [email._emailIndex])
 
   // Re-evaluate whenever a new email is selected or its body loads
   useEffect(() => {
@@ -164,40 +190,67 @@ export default function EmailDetail({ email, bodyLoading = false }) {
     .map(l => l.trim())
     .filter(l => l && !STATUS_LABELS.has(l))
 
+  const fromAddr = parseAddress(email.from)
+
   return (
     <div className="detail-pane">
       <div className="detail-header">
-        <div className="detail-subject">{email.subject || '(no subject)'}</div>
-        <div className="detail-fields">
-          <div><strong>From:</strong> {email.from || '—'}</div>
-          <div><strong>To:</strong>   {email.to   || '—'}</div>
-          <div><strong>Date:</strong> {email.date || '—'}</div>
+        <div className="detail-subject-row">
+          <h1 className="detail-subject">{email.subject || '(no subject)'}</h1>
+          {folderLabels.length > 0 && (
+            <div className="detail-label-row">
+              {folderLabels.map(l => (
+                <span
+                  key={l}
+                  className={`label-badge label-${l.toLowerCase().replace(/\s+/g, '-')}`}
+                >
+                  {l}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
-        {folderLabels.length > 0 && (
-          <div className="detail-label-row">
-            {folderLabels.map(l => (
-              <span
-                key={l}
-                className={`label-badge label-${l.toLowerCase().replace(/\s+/g, '-')}`}
-              >
-                {l}
-              </span>
-            ))}
-          </div>
-        )}
-        {email._bodyLoaded && (
-          <div className="detail-actions">
+
+        <div className="detail-sender-row">
+          <Avatar name={fromAddr.name} email={fromAddr.email} size={40} />
+          <div className="detail-sender-main">
+            <div className="detail-sender-line">
+              <span className="detail-sender-name">{fromAddr.name || '(unknown sender)'}</span>
+              {fromAddr.email && fromAddr.email !== fromAddr.name && (
+                <span className="detail-sender-email">&lt;{fromAddr.email}&gt;</span>
+              )}
+              <span className="detail-date">{formatFullDate(email.date)}</span>
+            </div>
             <button
               type="button"
-              className="detail-action-btn"
-              onClick={copyPlainText}
-              title="Copy plain text to clipboard"
+              className="detail-recipients-toggle"
+              onClick={() => setRecipientsOpen(o => !o)}
+              aria-expanded={recipientsOpen}
             >
-              <span className="gmi">content_copy</span>
-              {copyState === 'ok' ? 'Copied' : copyState === 'err' ? 'Copy failed' : 'Copy plain text'}
+              <span>{recipientsSummary(email.to) || 'recipients hidden'}</span>
+              <span className="gmi">{recipientsOpen ? 'arrow_drop_up' : 'arrow_drop_down'}</span>
             </button>
+            {recipientsOpen && (
+              <dl className="detail-recipients-full">
+                <div><dt>From</dt><dd>{email.from || '—'}</dd></div>
+                <div><dt>To</dt><dd>{email.to || '—'}</dd></div>
+                <div><dt>Date</dt><dd>{email.date || '—'}</dd></div>
+              </dl>
+            )}
           </div>
-        )}
+          {email._bodyLoaded && (
+            <div className="detail-header-actions">
+              <button
+                type="button"
+                className="detail-icon-btn"
+                onClick={copyPlainText}
+                title={copyState === 'ok' ? 'Copied' : copyState === 'err' ? 'Copy failed' : 'Copy plain text'}
+              >
+                <span className="gmi">{copyState === 'ok' ? 'check' : 'content_copy'}</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="detail-tabs">

@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import Avatar from './Avatar'
+import { parseAddress } from '../utils/address'
 
 export const EMAIL_ROW_HEIGHT = 72   // must match CSS .email-item height
 
@@ -98,6 +100,11 @@ export default function EmailList({
                   <span className="gmi email-item-star" aria-hidden>
                     {isStarred(email) ? 'star' : 'star_outline'}
                   </span>
+                  <Avatar
+                    name={parseAddress(email.from).name}
+                    email={parseAddress(email.from).email}
+                    size={36}
+                  />
                   <div className="email-item-body">
                     <div className="email-line-1">
                       <span className="email-from">{email.from || '(no sender)'}</span>
