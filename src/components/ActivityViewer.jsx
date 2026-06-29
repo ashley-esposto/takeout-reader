@@ -1,7 +1,8 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { parseActivityContent } from '../utils/activityParse'
 import ExportMenu from './ExportMenu'
 import VirtualList from './VirtualList'
+import DataTable from './DataTable'
 
 const ACTIVITY_COLUMNS = [
   { key: 'time', label: 'Time' },
@@ -19,45 +20,88 @@ const CATEGORY_LABELS = {
   drive: 'Drive Activity',
 }
 
+function tryParseJson(text) {
+  if (typeof text !== 'string') return text
+  try { return JSON.parse(text) } catch { return text }
+}
+
 export default function ActivityViewer({ items, category }) {
   const [selectedFile, setSelectedFile] = useState(0)
   const [search, setSearch] = useState('')
   const [showRaw, setShowRaw] = useState(false)
 
+  // Each file's content is fetched + parsed lazily when its tab is opened, so a
+  // section with hundreds of files (e.g. Drive) costs nothing until clicked and
+  // never holds them all in memory at once. Results are cached per index.
+  const cache = useRef(new Map())
+  const [loaded, setLoaded] = useState({ index: -1, parsed: null, rawText: '', loading: true, error: null })
+
   const catLabel = CATEGORY_LABELS[category] || category
 
-  // All hooks below run before the empty-items early return (further down) so
-  // the hook count stays constant across renders.
+  useEffect(() => {
+    const idx = selectedFile
+    const item = items[idx]
+    if (!item) return
+
+    if (cache.current.has(idx)) {
+      setLoaded({ index: idx, ...cache.current.get(idx), loading: false, error: null })
+      return
+    }
+
+    let cancelled = false
+    setLoaded((s) => ({ ...s, index: idx, loading: true, error: null }))
+    ;(async () => {
+      try {
+        // Support both lazy entries (getContent) and pre-parsed items (content).
+        let rawText = null
+        let contentForParse
+        if (item.content != null) {
+          contentForParse = item.content
+          rawText = typeof item.content === 'string' ? item.content : item.raw ?? null
+        } else if (typeof item.getContent === 'function') {
+          rawText = await item.getContent('string')
+          contentForParse = tryParseJson(rawText)
+        } else {
+          contentForParse = null
+        }
+        const parsed = parseActivityContent(contentForParse, { category, fileName: item.name || '' })
+        const entry = { parsed, rawText: typeof rawText === 'string' ? rawText : safeStringify(contentForParse) }
+        cache.current.set(idx, entry)
+        if (!cancelled) setLoaded({ index: idx, ...entry, loading: false, error: null })
+      } catch (e) {
+        if (!cancelled) setLoaded({ index: idx, parsed: null, rawText: '', loading: false, error: e.message || 'Could not read this file' })
+      }
+    })()
+    return () => { cancelled = true }
+  }, [selectedFile, items, category])
+
+  const isCurrent = loaded.index === selectedFile && !loaded.loading && !loaded.error
+  const parsed = isCurrent ? loaded.parsed : null
+  const records = parsed?.records || []
+  const mode = parsed?.mode
+  const overview = parsed?.overview
+  const table = parsed?.table
+
   const currentFile = items[selectedFile]
   const fileLabel = currentFile?.name?.split('/').pop() || 'File'
 
-  const parsed = useMemo(
-    () =>
-      parseActivityContent(currentFile?.content, {
-        category,
-        fileName: currentFile?.name || '',
-      }),
-    [currentFile?.content, currentFile?.name, category]
-  )
-
-  const { records, mode, overview } = parsed
-
+  // Card-mode filtering.
   const filtered = useMemo(() => {
+    if (!records.length) return records
     if (!search.trim()) return records
     const q = search.toLowerCase()
     return records.filter((r) => recordMatches(r, q))
   }, [records, search])
 
-  const rawPreview = useMemo(() => {
-    const c = currentFile?.content
-    if (c == null) return ''
-    if (typeof c === 'string') return c.slice(0, 120000)
-    try {
-      return JSON.stringify(c, null, 2).slice(0, 120000)
-    } catch {
-      return String(c)
-    }
-  }, [currentFile?.content])
+  // Table-mode filtering.
+  const filteredRows = useMemo(() => {
+    if (!table) return []
+    if (!search.trim()) return table.rows
+    const q = search.toLowerCase()
+    return table.rows.filter((row) => row.some((cell) => String(cell ?? '').toLowerCase().includes(q)))
+  }, [table, search])
+
+  const rawPreview = useMemo(() => (loaded.rawText || '').slice(0, 120000), [loaded.rawText])
 
   const renderCard = useCallback((record) => (
     <div className="activity-card">
@@ -117,11 +161,15 @@ export default function ActivityViewer({ items, category }) {
     )
   }
 
-  const countLabel = records.length
-    ? `${filtered.length.toLocaleString()} of ${records.length.toLocaleString()} entries`
-    : overview
-      ? 'Summary'
-      : 'No structured entries parsed'
+  const countLabel = loaded.loading
+    ? 'Loading…'
+    : table
+      ? `${filteredRows.length.toLocaleString()} of ${table.rows.length.toLocaleString()} rows`
+      : records.length
+        ? `${filtered.length.toLocaleString()} of ${records.length.toLocaleString()} entries`
+        : overview
+          ? 'Summary'
+          : 'No structured entries parsed'
 
   const rawFooter = (
     <footer className="activity-raw-footer">
@@ -148,7 +196,7 @@ export default function ActivityViewer({ items, category }) {
         <div className="activity-file-tabs" role="tablist">
           {items.map((item, i) => (
             <button
-              key={item.name + i}
+              key={(item.name || '') + i}
               type="button"
               role="tab"
               aria-selected={selectedFile === i}
@@ -159,7 +207,7 @@ export default function ActivityViewer({ items, category }) {
                 setShowRaw(false)
               }}
             >
-              {item.name.split('/').pop()}
+              {(item.name || 'File').split('/').pop()}
             </button>
           ))}
         </div>
@@ -181,7 +229,17 @@ export default function ActivityViewer({ items, category }) {
             autoComplete="off"
           />
         </label>
-        {records.length > 0 && (
+        {table ? (
+          <ExportMenu
+            stem={(fileLabel || category).replace(/\.csv$/i, '')}
+            columns={table.columns.map((c, i) => ({ key: `c${i}`, label: c }))}
+            getRows={() => filteredRows.map((row) => {
+              const o = {}
+              table.columns.forEach((_, i) => { o[`c${i}`] = row[i] ?? '' })
+              return o
+            })}
+          />
+        ) : records.length > 0 ? (
           <ExportMenu
             stem={category}
             columns={ACTIVITY_COLUMNS}
@@ -193,10 +251,27 @@ export default function ActivityViewer({ items, category }) {
               url: r.titleUrl || r.url || '',
             }))}
           />
-        )}
+        ) : null}
       </div>
 
-      {records.length > 0 ? (
+      {loaded.loading ? (
+        <div className="activity-body">
+          <div className="detail-empty">Loading {fileLabel}…</div>
+        </div>
+      ) : loaded.error ? (
+        <div className="activity-body">
+          <div className="detail-empty">Could not read this file. {loaded.error}</div>
+        </div>
+      ) : table ? (
+        <div className="activity-body activity-body--virtual">
+          {filteredRows.length > 0 ? (
+            <DataTable columns={table.columns} rows={filteredRows} />
+          ) : (
+            <p className="activity-empty-search">No rows match “{search}”.</p>
+          )}
+          {rawFooter}
+        </div>
+      ) : records.length > 0 ? (
         <div className="activity-body activity-body--virtual">
           {filtered.length > 0 ? (
             <VirtualList
@@ -241,6 +316,12 @@ export default function ActivityViewer({ items, category }) {
   )
 }
 
+function safeStringify(content) {
+  if (content == null) return ''
+  if (typeof content === 'string') return content
+  try { return JSON.stringify(content, null, 2) } catch { return String(content) }
+}
+
 function recordMatches(r, q) {
   const parts = [
     r.title,
@@ -261,8 +342,9 @@ function iconForRecord(record, mode) {
   if (record.header?.includes('Trip') || record.header === 'Location') return 'route'
   if (record.header?.includes('device') || record.header?.includes('Device')) return 'smartphone'
   if (mode === 'chrome' || record.header === 'Chrome') return 'public'
-  if (mode === 'youtube') return 'play_circle'
+  if (mode === 'youtube' || record.header === 'YouTube') return 'play_circle'
   if (mode === 'location') return 'location_on'
+  if (record.header === 'Search') return 'search'
   return 'description'
 }
 

@@ -2,16 +2,34 @@
  * Parse Google Takeout JSON/HTML exports into rows the Activity viewer can render.
  * Handles multiple Chrome & Location export shapes and falls back to human summaries.
  */
+import { parseCSV, looksLikeCSV } from './csvParse'
 
 const MAX_CHROME_ROWS = 8000
 const MAX_LOCATION_POINTS = 50000
 const MAX_GENERIC_ROWS = 500
+const MAX_MYACTIVITY_HTML_ROWS = 20000
 
 /**
- * @returns {{ records: object[], mode: string, overview?: object }}
+ * @returns {{ records: object[], mode: string, overview?: object, table?: {columns, rows} }}
  */
 export function parseActivityContent(content, { category, fileName = '' } = {}) {
   const name = (fileName || '').toLowerCase()
+
+  // ── CSV (Drive exports, reports, etc.) ────────────────────────────────────
+  if (typeof content === 'string' && looksLikeCSV(content, fileName)) {
+    const table = parseCSV(content)
+    if (table.columns.length) {
+      return { records: [], mode: 'table', table }
+    }
+  }
+
+  // ── My Activity / YouTube HTML (rigid Google "outer-cell" format) ─────────
+  if (typeof content === 'string' && /outer-cell|My Activity History|<!doctype html|<html/i.test(content)) {
+    const html = extractMyActivityHtml(content)
+    if (html.length) {
+      return { records: html, mode: 'myactivity' }
+    }
+  }
 
   // ── Chrome: many file names / JSON shapes ─────────────────────────────────
   if (category === 'chrome' || name.includes('chrome') || name.includes('history')) {
@@ -44,6 +62,103 @@ export function parseActivityContent(content, { category, fileName = '' } = {}) 
   }
 
   return { records: [], mode: 'unknown', overview: buildOverview(content) }
+}
+
+// ── My Activity HTML ─────────────────────────────────────────────────────────
+
+/**
+ * Parse Google's "MyActivity.html" export. Each activity is an `outer-cell`
+ * div containing a `header-cell` (the product, e.g. "Search", "YouTube") and a
+ * body `content-cell` whose <br>-separated lines are: the action + title
+ * (often a link), optional secondary line (e.g. a channel), and a trailing
+ * timestamp. Pure string parsing — no DOM dependency, so it runs in tests too.
+ */
+export function extractMyActivityHtml(html) {
+  if (typeof html !== 'string' || !html.includes('outer-cell')) return []
+  const out = []
+
+  // Split into per-activity chunks on the outer-cell boundary.
+  const chunks = html.split(/<div class="outer-cell/)
+  for (let c = 1; c < chunks.length && out.length < MAX_MYACTIVITY_HTML_ROWS; c++) {
+    const chunk = chunks[c]
+
+    const header = stripTags(matchFirst(chunk, /class="mdl-typography--title"[^>]*>(.*?)<\/p>/s)) || 'Activity'
+
+    // First body content-cell holds the action/title/time.
+    const body = matchFirst(
+      chunk,
+      /class="content-cell mdl-cell mdl-cell--6-col mdl-typography--body-1"[^>]*>(.*?)<\/div>/s
+    )
+    if (body == null) continue
+
+    const firstLink = matchFirst(body, /<a [^>]*href="([^"]+)"/i)
+    const lines = body
+      .split(/<br\s*\/?>/i)
+      .map((l) => stripTags(l).trim())
+      .filter(Boolean)
+
+    if (lines.length === 0) continue
+
+    // Trailing line is usually the timestamp ("Jul 23, 2025, 5:00:49 PM PDT").
+    let time = null
+    let timeIdx = -1
+    for (let k = lines.length - 1; k >= 0; k--) {
+      const t = parseActivityDate(lines[k])
+      if (t) { time = t; timeIdx = k; break }
+    }
+
+    const textLines = lines.filter((_, idx) => idx !== timeIdx)
+    const title = textLines[0] || header
+    const subtitle = textLines.slice(1).join(' · ') || ''
+
+    out.push({
+      id: out.length,
+      header,
+      title,
+      subtitle,
+      titleUrl: firstLink || undefined,
+      time,
+    })
+  }
+
+  return out
+}
+
+function matchFirst(str, re) {
+  const m = re.exec(str)
+  return m ? (m[1] !== undefined ? m[1] : m[0]) : null
+}
+
+function stripTags(s) {
+  if (s == null) return ''
+  return decodeEntities(String(s).replace(/<[^>]*>/g, ''))
+}
+
+function decodeEntities(s) {
+  return s
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&emsp;/g, ' ')
+    .replace(/&nbsp;| /g, ' ')
+    .trim()
+}
+
+/** Parse Google MyActivity timestamps like "Jul 23, 2025, 5:00:49 PM PDT". */
+function parseActivityDate(line) {
+  if (!line) return null
+  // Must look date-ish to avoid treating a title as a timestamp.
+  if (!/\b\d{4}\b/.test(line) || !/\d{1,2}:\d{2}/.test(line)) return null
+  // Parse the full string first — V8 understands the trailing timezone
+  // abbreviation (PDT/PST/EDT…), so this preserves the original zone
+  // regardless of where the reviewer is. Fall back to a stripped version.
+  const d = new Date(line)
+  if (!Number.isNaN(d.getTime())) return d.toISOString()
+  const cleaned = line.replace(/\s+[A-Z]{2,5}$/, '').trim()
+  const d2 = new Date(cleaned)
+  return Number.isNaN(d2.getTime()) ? null : d2.toISOString()
 }
 
 function mapMyActivityItem(item, i) {

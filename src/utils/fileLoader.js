@@ -102,6 +102,21 @@ const CATEGORY_RULES = [
   { key: 'drive',    test: (p) => p.includes('/drive/') && (p.endsWith('.json') || p.endsWith('.csv')) },
 ]
 
+// Bounded-memory zip cache: keep only the most recently opened zip in memory.
+// Opening a second zip evicts the first, so loading many (or large) exports
+// never holds every zip's decompressed data at once. Reading a file re-opens
+// its source zip on demand — cheap when the same zip is read repeatedly.
+let _zipCache = { file: null, zip: null }
+
+async function openZipCached(file) {
+  if (_zipCache.file === file && _zipCache.zip) return _zipCache.zip
+  _zipCache = { file: null, zip: null } // drop the previous zip before allocating the next
+  const buffer = await readFileAsArrayBuffer(file)
+  const zip = await JSZip.loadAsync(buffer)
+  _zipCache = { file, zip }
+  return zip
+}
+
 /**
  * Scan a Google Takeout file and return all found categories.
  * @param {File} file - Raw File object from the browser input
@@ -125,21 +140,11 @@ export async function scanTakeout(file) {
     )
   }
 
-  // Read the zip in one go — zip files are typically much smaller than raw mbox
-  let buffer
-  try {
-    buffer = await readFileAsArrayBuffer(file)
-  } catch (err) {
-    throw new Error(`Could not read the zip from your device. ${err.message}`)
-  }
-
   let zip
   try {
-    zip = await JSZip.loadAsync(buffer)
+    zip = await openZipCached(file)
   } catch (err) {
-    throw new Error(
-      `Could not open the zip file. It may be corrupt or incomplete. (${err.message})`
-    )
+    throw new Error(`Could not read the zip from your device. ${err.message}`)
   }
 
   const categories = {}
@@ -150,14 +155,22 @@ export async function scanTakeout(file) {
     const rule = CATEGORY_RULES.find((r) => r.test(pathLower))
     // Unrecognized files land in "other" so nothing in the archive is invisible.
     const key = rule ? rule.key : 'other'
+    const entryName = entry.name
 
     if (!categories[key]) categories[key] = []
     categories[key].push({
-      name: entry.name,
-      getContent: (format = 'string') => entry.async(format),
+      name: entryName,
+      // Re-open the source zip lazily (cached) so we don't retain this JSZip
+      // instance for the whole session.
+      getContent: async (format = 'string') => {
+        const z = await openZipCached(file)
+        const f = z.file(entryName)
+        if (!f) throw new Error(`Entry "${entryName}" not found in archive`)
+        return f.async(format)
+      },
       // Source zip + entry name let the worker decompress mail off-thread.
       zipFile: file,
-      entryName: entry.name,
+      entryName,
     })
   }
 
@@ -190,9 +203,17 @@ export async function scanTakeoutFiles(fileList) {
     return scanTakeout(files[0])
   }
 
-  const merged = { type: 'merged-takeout', categories: {} }
+  const merged = { type: 'merged-takeout', categories: {}, warnings: [] }
   for (const file of files) {
-    const one = await scanTakeout(file)
+    // Resilient: a single zip that's too large to read (or corrupt) must not
+    // abort the whole batch — skip it with a warning and load the rest.
+    let one
+    try {
+      one = await scanTakeout(file)
+    } catch (err) {
+      merged.warnings.push(`Skipped “${file.name}”: ${err.message}`)
+      continue
+    }
     for (const [key, arr] of Object.entries(one.categories)) {
       if (!merged.categories[key]) merged.categories[key] = []
       merged.categories[key].push(...(arr || []))
@@ -200,10 +221,10 @@ export async function scanTakeoutFiles(fileList) {
   }
 
   if (Object.keys(merged.categories).length === 0) {
-    throw new Error(
-      'No recognizable Google Takeout data in the selected files. ' +
-      'Upload .zip archives from takeout.google.com and/or Gmail .mbox files.'
-    )
+    const why = merged.warnings.length
+      ? ` ${merged.warnings.join(' ')}`
+      : ' Upload .zip archives from takeout.google.com and/or Gmail .mbox files.'
+    throw new Error('No recognizable Google Takeout data loaded.' + why)
   }
 
   return merged

@@ -86,6 +86,7 @@ function GmailTopBar({ center, simple }) {
 export default function App() {
   const [takeout, setTakeout]               = useState(null)
   const [scanError, setScanError]           = useState(null)
+  const [scanWarning, setScanWarning]       = useState(null)
   const [activeCategory, setActiveCategory] = useState(null)
   const [categoryData, setCategoryData]     = useState({})
   const [loadingCategory, setLoadingCategory] = useState(null)
@@ -379,6 +380,7 @@ export default function App() {
 
     cancelParsing()
     setScanError(null)
+    setScanWarning(null)
     setTakeout(null)
     setCategoryData({})
     setActiveCategory(null)
@@ -401,6 +403,7 @@ export default function App() {
       return
     }
 
+    if (result.warnings?.length) setScanWarning(result.warnings.join(' '))
     setTakeout(result)
     // Land on the overview rather than eagerly parsing the first category —
     // keeps the landing instant and lets the user choose where to start.
@@ -481,16 +484,11 @@ export default function App() {
         setCategoryData((prev) => ({ ...prev, other: entries }))
 
       } else {
-        const items = []
-        for (const entry of entries.slice(0, 10)) {
-          try {
-            const text = await entry.getContent('string')
-            let content
-            try { content = JSON.parse(text) } catch { content = text }
-            items.push({ name: entry.name, content, raw: text })
-          } catch { /* skip */ }
-        }
-        setCategoryData((prev) => ({ ...prev, [key]: items }))
+        // Activity-style categories (activity/chrome/youtube/location/drive):
+        // store the entry list as-is and let ActivityViewer fetch + parse each
+        // file lazily when its tab is opened. No upfront read, no file-count
+        // cap, and only one file's content is held at a time.
+        setCategoryData((prev) => ({ ...prev, [key]: entries }))
       }
     } catch (err) {
       console.error(`Error loading category "${key}":`, err)
@@ -613,6 +611,16 @@ export default function App() {
   return (
     <div className="gmail-app">
       <GmailTopBar center={mailSearchBar} />
+
+      {scanWarning && (
+        <div className="scan-warning" role="status">
+          <span className="gmi" aria-hidden>warning</span>
+          <span className="scan-warning-text">{scanWarning}</span>
+          <button type="button" className="scan-warning-close" onClick={() => setScanWarning(null)} aria-label="Dismiss">
+            <span className="gmi" aria-hidden>close</span>
+          </button>
+        </div>
+      )}
 
       {(parsing || loadingCategory) && (
         <ParseProgress
@@ -856,7 +864,7 @@ export default function App() {
             <ContactsViewer contacts={categoryData.contacts || []} />
           )}
           {['activity', 'location', 'chrome', 'youtube', 'drive'].includes(activeCategory) && (
-            <ActivityViewer items={categoryData[activeCategory] || []} category={activeCategory} />
+            <ActivityViewer key={activeCategory} items={categoryData[activeCategory] || []} category={activeCategory} />
           )}
           {activeCategory === 'other' && (
             <FilesViewer files={categoryData.other || []} />
