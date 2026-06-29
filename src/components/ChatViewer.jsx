@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import ExportMenu from './ExportMenu'
 import PaneResizer from './PaneResizer'
+import VirtualList from './VirtualList'
 import { useResizableSize } from '../hooks/useResizableSize'
 
 const CHAT_COLUMNS = [
@@ -16,6 +17,21 @@ export default function ChatViewer({ conversations }) {
   const [selected, setSelected] = useState(null)
   const [search, setSearch] = useState('')
   const [sbW, onSbDelta, resetSb] = useResizableSize('tr.viewerSidebarW', 260, 180, 520)
+
+  const renderMessage = useCallback((msg) => (
+    <div className="chat-message">
+      <div className="chat-sender">
+        {msg.sender}
+        {msg.email && msg.email !== msg.sender && (
+          <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
+            ({msg.email})
+          </span>
+        )}
+      </div>
+      <div className="chat-text">{msg.text}</div>
+      <div className="chat-time">{formatDateTime(msg.timestamp)}</div>
+    </div>
+  ), [])
 
   const filtered = conversations.filter(
     (c) =>
@@ -93,21 +109,14 @@ export default function ChatViewer({ conversations }) {
                 </div>
               </div>
             </div>
-            <div className="chat-messages">
-              {selected.messages.map((msg, i) => (
-                <div key={i} className="chat-message">
-                  <div className="chat-sender">
-                    {msg.sender}
-                    {msg.email && msg.email !== msg.sender && (
-                      <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
-                        ({msg.email})
-                      </span>
-                    )}
-                  </div>
-                  <div className="chat-text">{msg.text}</div>
-                  <div className="chat-time">{formatDateTime(msg.timestamp)}</div>
-                </div>
-              ))}
+            <div className="chat-messages chat-messages--virtual">
+              <VirtualList
+                items={selected.messages}
+                renderItem={renderMessage}
+                estimated={72}
+                gap={10}
+                padX={24}
+              />
             </div>
           </div>
         ) : (

@@ -1093,6 +1093,7 @@ body.resizing-x .mail-sidebar, body.resizing-y .mail-sidebar { transition: none;
 /* ── Chat viewer ── */
 .chat-thread { display: flex; flex-direction: column; height: 100%; overflow: hidden; background: var(--gm-panel); }
 .chat-messages { flex: 1; overflow-y: auto; padding: 16px 24px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; scrollbar-color: var(--gm-border) transparent; }
+.chat-messages--virtual { overflow: hidden; padding: 0; display: block; gap: 0; }
 .chat-message { background: var(--gm-surface); border-radius: 12px; padding: 10px 14px; border: 1px solid var(--gm-border); }
 .chat-sender { font-size: 12px; font-weight: 500; color: var(--gm-blue); margin-bottom: 4px; }
 .chat-text { font-size: 14px; color: var(--gm-text); line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
@@ -1107,6 +1108,29 @@ body.resizing-x .mail-sidebar, body.resizing-y .mail-sidebar { transition: none;
   scrollbar-width: thin;
   scrollbar-color: var(--gm-border) transparent;
 }
+
+/* Virtualized variant: the list owns the scroll; the raw footer pins below it. */
+.activity-body--virtual {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+.activity-body--virtual .virtual-list { flex: 1; min-height: 0; }
+.activity-body--virtual .activity-raw-footer {
+  flex-shrink: 0;
+  margin-top: 0;
+  padding: 8px 16px;
+  border-top: 1px solid var(--gm-border);
+}
+.activity-body--virtual .activity-empty-search { flex: 1; }
+
+/* Generic windowed list container — fills its parent so react-window can
+   measure a pixel height. The inner scroller is supplied by react-window. */
+.virtual-list { position: relative; width: 100%; height: 100%; }
+.virtual-list > div { scrollbar-width: thin; scrollbar-color: var(--gm-border) transparent; }
 
 .activity-file-tabs {
   display: flex;

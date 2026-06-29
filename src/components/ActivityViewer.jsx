@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { parseActivityContent } from '../utils/activityParse'
 import ExportMenu from './ExportMenu'
+import VirtualList from './VirtualList'
 
 const ACTIVITY_COLUMNS = [
   { key: 'time', label: 'Time' },
@@ -58,6 +59,56 @@ export default function ActivityViewer({ items, category }) {
     }
   }, [currentFile?.content])
 
+  const renderCard = useCallback((record) => (
+    <div className="activity-card">
+      <div className="activity-card-icon" aria-hidden>
+        <span className="gmi">{iconForRecord(record, mode)}</span>
+      </div>
+      <div className="activity-card-main">
+        {record.header && (
+          <div className="activity-card-kicker">{record.header}</div>
+        )}
+        <div className="activity-card-title">
+          {record.title || record.name || 'Entry'}
+        </div>
+        {record.subtitle && (
+          <div className="activity-card-subtitle">{record.subtitle}</div>
+        )}
+        {(record.titleUrl || record.url) && (
+          <a
+            className="activity-card-link"
+            href={record.titleUrl || record.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {truncateMiddle(record.titleUrl || record.url, 72)}
+          </a>
+        )}
+        {record.time && (
+          <time className="activity-card-time" dateTime={record.time}>
+            {formatFriendlyTime(record.time)}
+          </time>
+        )}
+        {record.details?.length > 0 && (
+          <dl className="activity-dl activity-dl--compact">
+            {record.details.map((row, j) => (
+              <div key={j} className="activity-dl-row">
+                <dt>{row.label}</dt>
+                <dd>{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </div>
+    </div>
+  ), [mode])
+
+  const recordKey = useCallback(
+    (record, i) => record.id ?? `${i}-${record.title}-${record.time}`,
+    []
+  )
+
   if (items.length === 0) {
     return (
       <div className="detail-empty">
@@ -71,6 +122,25 @@ export default function ActivityViewer({ items, category }) {
     : overview
       ? 'Summary'
       : 'No structured entries parsed'
+
+  const rawFooter = (
+    <footer className="activity-raw-footer">
+      <button
+        type="button"
+        className="activity-raw-toggle"
+        onClick={() => setShowRaw((v) => !v)}
+        aria-expanded={showRaw}
+      >
+        <span className="gmi">{showRaw ? 'expand_less' : 'code'}</span>
+        {showRaw ? 'Hide technical details' : 'Technical details (raw data)'}
+      </button>
+      {showRaw && (
+        <pre className="activity-raw-pre" tabIndex={0}>
+          {rawPreview}
+        </pre>
+      )}
+    </footer>
+  )
 
   return (
     <div className="activity-layout activity-layout--friendly">
@@ -126,103 +196,47 @@ export default function ActivityViewer({ items, category }) {
         )}
       </div>
 
-      <div className="activity-body">
-        {records.length === 0 && overview && (
-          <section className="activity-overview" aria-label="Overview">
-            <h2 className="activity-overview-title">{overview.title}</h2>
-            <p className="activity-overview-lead">{overview.summaryLine}</p>
-            {overview.rows?.length > 0 && (
-              <dl className="activity-dl">
-                {overview.rows.map((row, i) => (
-                  <div key={i} className="activity-dl-row">
-                    <dt>{row.label}</dt>
-                    <dd>{row.value}</dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-            <p className="activity-hint">
-              This file uses a format we don’t fully expand yet. Use <strong>Technical details</strong> below only if you need the raw export.
-            </p>
-          </section>
-        )}
-
-        {records.length > 0 && (
-          <ul className="activity-card-list">
-            {filtered.slice(0, 1500).map((record, i) => (
-              <li key={record.id ?? `${i}-${record.title}-${record.time}`} className="activity-card">
-                <div className="activity-card-icon" aria-hidden>
-                  <span className="gmi">{iconForRecord(record, mode)}</span>
-                </div>
-                <div className="activity-card-main">
-                  {record.header && (
-                    <div className="activity-card-kicker">{record.header}</div>
-                  )}
-                  <div className="activity-card-title">
-                    {record.title || record.name || 'Entry'}
-                  </div>
-                  {record.subtitle && (
-                    <div className="activity-card-subtitle">{record.subtitle}</div>
-                  )}
-                  {(record.titleUrl || record.url) && (
-                    <a
-                      className="activity-card-link"
-                      href={record.titleUrl || record.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {truncateMiddle(record.titleUrl || record.url, 72)}
-                    </a>
-                  )}
-                  {record.time && (
-                    <time className="activity-card-time" dateTime={record.time}>
-                      {formatFriendlyTime(record.time)}
-                    </time>
-                  )}
-                  {record.details?.length > 0 && (
-                    <dl className="activity-dl activity-dl--compact">
-                      {record.details.map((row, j) => (
-                        <div key={j} className="activity-dl-row">
-                          <dt>{row.label}</dt>
-                          <dd>{row.value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {filtered.length > 1500 && (
-          <p className="activity-limit-note">
-            Showing the first 1,500 matching entries. Narrow your search to see more.
-          </p>
-        )}
-
-        {records.length > 0 && filtered.length === 0 && (
-          <p className="activity-empty-search">No entries match “{search}”.</p>
-        )}
-
-        <footer className="activity-raw-footer">
-          <button
-            type="button"
-            className="activity-raw-toggle"
-            onClick={() => setShowRaw((v) => !v)}
-            aria-expanded={showRaw}
-          >
-            <span className="gmi">{showRaw ? 'expand_less' : 'code'}</span>
-            {showRaw ? 'Hide technical details' : 'Technical details (raw data)'}
-          </button>
-          {showRaw && (
-            <pre className="activity-raw-pre" tabIndex={0}>
-              {rawPreview}
-            </pre>
+      {records.length > 0 ? (
+        <div className="activity-body activity-body--virtual">
+          {filtered.length > 0 ? (
+            <VirtualList
+              items={filtered}
+              renderItem={renderCard}
+              itemKey={recordKey}
+              estimated={96}
+              gap={8}
+              padX={16}
+              className="activity-card-vlist"
+            />
+          ) : (
+            <p className="activity-empty-search">No entries match “{search}”.</p>
           )}
-        </footer>
-      </div>
+          {rawFooter}
+        </div>
+      ) : (
+        <div className="activity-body">
+          {overview && (
+            <section className="activity-overview" aria-label="Overview">
+              <h2 className="activity-overview-title">{overview.title}</h2>
+              <p className="activity-overview-lead">{overview.summaryLine}</p>
+              {overview.rows?.length > 0 && (
+                <dl className="activity-dl">
+                  {overview.rows.map((row, i) => (
+                    <div key={i} className="activity-dl-row">
+                      <dt>{row.label}</dt>
+                      <dd>{row.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+              <p className="activity-hint">
+                This file uses a format we don’t fully expand yet. Use <strong>Technical details</strong> below only if you need the raw export.
+              </p>
+            </section>
+          )}
+          {rawFooter}
+        </div>
+      )}
     </div>
   )
 }
